@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Longitude Revenue Evaluation - {{address}}</title>
+  <style>
+    :root {
+      --cream: #f6f1de;
+      --gold: #c89432;
+      --gold-soft: #ac7f2d;
+      --navy: #122530;
+      --navy-soft: #18313f;
+      --mountain-back: #586d79;
+      --mountain-mid: #31424e;
+      --copy: #e4dcc7;
+      --muted: #9e9b8d;
+      --ring: #667782;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    @page {
+      size: 8.5in 11in;
+      margin: 0;
+    }
+
+    html, body {
+      width: 816px;
+      height: 1056px;
+      overflow: hidden;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      background: var(--navy);
+    }
+
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--copy);
+    }
+
+    .page {
+      position: relative;
+      width: 816px;
+      height: 1056px;
+      overflow: hidden;
+      background: var(--navy);
+    }
+
+    .sky {
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 286px;
+      background: var(--cream);
+    }
+
+    .mountain {
+      position: absolute;
+      inset-inline: 0;
+      background: var(--mountain-back);
+    }
+
+    .mountain.back {
+      top: 86px;
+      height: 360px;
+      clip-path: polygon(0 4%, 5% 6%, 11% 15%, 26% 23%, 42% 51%, 54% 56%, 77% 31%, 91% 20%, 100% 17%, 100% 100%, 0 100%);
+    }
+
+    .mountain.mid {
+      top: 140px;
+      height: 336px;
+      background: var(--mountain-mid);
+      clip-path: polygon(0 17%, 4% 13%, 10% 21%, 17% 47%, 30% 47%, 43% 60%, 50% 77%, 60% 59%, 72% 46%, 86% 36%, 100% 25%, 100% 100%, 0 100%);
+    }
+
+    .mountain.front {
+      top: 218px;
+      height: 340px;
+      background: var(--navy);
+      clip-path: polygon(0 41%, 10% 34%, 19% 33%, 32% 28%, 43% 30%, 55% 22%, 67% 26%, 81% 18%, 100% 15%, 100% 100%, 0 100%);
+    }
+
+    .logo-lockup {
+      position: absolute;
+      top: 22px;
+      left: 50%;
+      width: 620px;
+      transform: translateX(-50%);
+      z-index: 4;
+      text-align: center;
+      color: #101c28;
+    }
+
+    .logo-wordmark {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 62px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+
+    .logo-mark {
+      width: 24px;
+      height: 24px;
+      border: 8px solid #c54c22;
+      border-radius: 50%;
+      margin-top: 8px;
+      flex: 0 0 auto;
+    }
+
+    .logo-subtitle {
+      margin-top: 4px;
+      font-size: 24px;
+      line-height: 1.05;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .photo-frame {
+      position: absolute;
+      top: 160px;
+      left: 50%;
+      width: 166px;
+      height: 166px;
+      transform: translateX(-50%);
+      border: 10px solid var(--ring);
+      border-radius: 50%;
+      overflow: hidden;
+      z-index: 5;
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.18), transparent 40%),
+        linear-gradient(160deg, #324654 0%, #1c2f3b 100%);
+    }
+
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hero-photo-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      color: rgba(246, 241, 222, 0.84);
+      font-size: 14px;
+      line-height: 1.35;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .cards {
+      position: absolute;
+      top: 336px;
+      left: 24px;
+      width: 768px;
+      display: flex;
+      justify-content: space-between;
+      gap: 22px;
+      z-index: 4;
+    }
+
+    .card {
+      width: 234px;
+      min-height: 116px;
+      padding: 12px 14px 11px;
+      border: 3px solid var(--gold);
+      background: rgba(18, 37, 48, 0.2);
+      text-align: center;
+    }
+
+    .card-label {
+      color: var(--gold);
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .card-revenue {
+      color: var(--cream);
+      font-size: 33px;
+      line-height: 1.05;
+      font-weight: 700;
+      margin-bottom: 7px;
+    }
+
+    .card-desc {
+      color: var(--gold);
+      font-size: 7px;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+    }
+
+    .chart-area {
+      position: absolute;
+      top: 482px;
+      left: 104px;
+      width: 608px;
+      height: 150px;
+      z-index: 4;
+    }
+
+    .chart-shell {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .chart-y-axis {
+      width: 76px;
+      padding: 0 10px 18px 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: flex-end;
+      color: rgba(246, 241, 222, 0.82);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .chart-plot {
+      position: relative;
+      flex: 1;
+    }
+
+    .chart-grid {
+      position: absolute;
+      inset: 0 0 18px 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .chart-grid-line {
+      border-top: 1px solid rgba(246, 241, 222, 0.13);
+    }
+
+    .chart-grid-line.baseline {
+      border-top-width: 3px;
+      border-top-color: rgba(246, 241, 222, 0.95);
+    }
+
+    .chart-bars {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 6px;
+    }
+
+    .chart-month {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .chart-bar-track {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 8px;
+    }
+
+    .chart-bar {
+      width: 16px;
+      min-height: 0;
+      border-radius: 2px 2px 0 0;
+      background: rgba(249, 246, 231, 0.96);
+      box-shadow: 0 0 0 1px rgba(246, 241, 222, 0.35);
+    }
+
+    .chart-month-label {
+      height: 10px;
+      color: rgba(246, 241, 222, 0.8);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8px;
+      line-height: 1;
+    }
+
+    .property-line {
+      position: absolute;
+      top: 652px;
+      left: 48px;
+      width: 720px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cream);
+      z-index: 4;
+    }
+
+    .description {
+      position: absolute;
+      top: 694px;
+      left: 40px;
+      width: 736px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--copy);
+      z-index: 4;
+    }
+
+    .cta {
+      position: absolute;
+      top: 812px;
+      left: 56px;
+      width: 704px;
+      text-align: center;
+      color: var(--gold-soft);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+      z-index: 4;
+    }
+
+    .contact-row {
+      position: absolute;
+      top: 888px;
+      left: 28px;
+      width: 760px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 4;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--gold);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .contact-badge {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--gold);
+      border-radius: 50%;
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+
+    .disclaimer {
+      position: absolute;
+      top: 952px;
+      left: 28px;
+      width: 760px;
+      color: rgba(158, 155, 141, 0.95);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8px;
+      line-height: 1.35;
+      z-index: 4;
+    }
+
+    .disclaimer strong {
+      color: rgba(190, 188, 175, 0.95);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="sky"></div>
+    <div class="mountain back"></div>
+    <div class="mountain mid"></div>
+    <div class="mountain front"></div>
+
+    <div class="logo-lockup">
+      <div class="logo-wordmark"><span class="logo-mark"></span><span>LONGITUDE</span></div>
+      <div class="logo-subtitle">Projected Revenue Evaluation</div>
+    </div>
+
+    <div class="photo-frame">
+      {{heroPhoto}}
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Optimized</div>
+        <div class="card-revenue">{{highRevenue}}</div>
+        <div class="card-desc">Ideal seasonal conditions, healthy travel economy, full calendar availability, maximum rate and occupancy flexibility</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Balanced</div>
+        <div class="card-revenue">{{mediumRevenue}}</div>
+        <div class="card-desc">Favorable seasonal conditions, steady travel economy, limited owner usage, competitive rate and occupancy</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Conservative</div>
+        <div class="card-revenue">{{lowRevenue}}</div>
+        <div class="card-desc">Poor seasonal conditions, slow travel economy, heavy owner usage, reduced rate and occupancy flexibility</div>
+      </div>
+    </div>
+
+    <div class="chart-area">
+      <div class="chart-shell">
+        <div class="chart-y-axis">{{chartYAxisLabels}}</div>
+        <div class="chart-plot">
+          <div class="chart-grid">{{chartGridLines}}</div>
+          <div class="chart-bars">{{chartBars}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="property-line">Property: {{address}}</div>
+
+    <div class="description">
+      Longitude approaches short term rental through an owner-first hospitality model. We tailor each
+      rental strategy to reflect your lifestyle, preferences, and vision for your home. We ensure seamless
+      communication, and a level of flexibility rarely offered in traditional property management models.
+      Our decisions are guided by long-term care and alignment with our owners, never short-term gain at
+      the expense of your home or experience.
+    </div>
+
+    <div class="cta">
+      For questions about this pro forma or management opportunities,<br />
+      contact our Longitude Sales team with the information below:
+    </div>
+
+    <div class="contact-row">
+      <div class="contact-item"><span class="contact-badge"></span><span>cameron@longitudeexperience.com</span></div>
+      <div class="contact-item"><span class="contact-badge"></span><span>longitudeexperience.com</span></div>
+      <div class="contact-item"><span class="contact-badge"></span><span>(435) 994-8899</span></div>
+    </div>
+
+    <div class="disclaimer">
+      <strong>DISCLAIMER:</strong> The projections and related information above comprise forward-looking statements. They are provided for illustrative purposes only, have no legal force or effect, should not be substantially relied upon in making any legal or financial decisions, and are in no way a guarantee of future results. Actual results may vary greatly based on known and unknown variables and risks including home usage, size, and condition, as well as weather conditions and other economic factors. After launch, properties can take 3-6 months to reach optimal performance. This document is confidential to Longitude and intended only for reference by prospective clients and their associated real estate professionals.
+    </div>
+  </div>
+</body>
+</html>

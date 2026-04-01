@@ -1,0 +1,21 @@
+{
+  "name": "str-revenue-bot",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sheets": "tsx scripts/sheets.ts",
+    "write-sheet-data": "tsx scripts/write-sheet-data.ts",
+    "generate-pdf": "tsx scripts/generate-pdf.ts",
+    "download-images": "tsx scripts/download-images.ts",
+    "slack": "tsx scripts/slack.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

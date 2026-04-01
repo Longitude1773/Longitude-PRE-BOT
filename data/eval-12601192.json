@@ -1,0 +1,125 @@
+{
+  "address": "1516 Deer Valley Drive #25, Park City, UT 84060",
+  "mlsNumber": "12601192",
+  "price": 2295000,
+  "bedrooms": 2,
+  "bathrooms": 3,
+  "squareFootage": 2200,
+  "propertyType": "Condominium / Townhouse",
+  "photos": [],
+  "hero": {
+    "centerX": 306,
+    "centerY": 165,
+    "photoRadius": 55,
+    "focalX": 0.50,
+    "focalY": 0.45,
+    "zoom": 1.15
+  },
+  "projections": {
+    "high": {
+      "revenue": 145000,
+      "occupancy": 0.72,
+      "adr": 552,
+      "monthly": [
+        {"month": "Jan", "revenue": 21200, "occupancy": 0.88, "adr": 650},
+        {"month": "Feb", "revenue": 19200, "occupancy": 0.85, "adr": 620},
+        {"month": "Mar", "revenue": 16000, "occupancy": 0.78, "adr": 575},
+        {"month": "Apr", "revenue": 5800, "occupancy": 0.38, "adr": 425},
+        {"month": "May", "revenue": 5400, "occupancy": 0.35, "adr": 420},
+        {"month": "Jun", "revenue": 11900, "occupancy": 0.68, "adr": 480},
+        {"month": "Jul", "revenue": 14900, "occupancy": 0.78, "adr": 525},
+        {"month": "Aug", "revenue": 13300, "occupancy": 0.72, "adr": 510},
+        {"month": "Sep", "revenue": 7000, "occupancy": 0.45, "adr": 435},
+        {"month": "Oct", "revenue": 6200, "occupancy": 0.40, "adr": 430},
+        {"month": "Nov", "revenue": 8000, "occupancy": 0.52, "adr": 475},
+        {"month": "Dec", "revenue": 16100, "occupancy": 0.85, "adr": 620}
+      ]
+    },
+    "medium": {
+      "revenue": 115000,
+      "occupancy": 0.60,
+      "adr": 525,
+      "monthly": [
+        {"month": "Jan", "revenue": 17000, "occupancy": 0.82, "adr": 600},
+        {"month": "Feb", "revenue": 15400, "occupancy": 0.78, "adr": 575},
+        {"month": "Mar", "revenue": 12800, "occupancy": 0.70, "adr": 540},
+        {"month": "Apr", "revenue": 4400, "occupancy": 0.28, "adr": 390},
+        {"month": "May", "revenue": 3900, "occupancy": 0.25, "adr": 380},
+        {"month": "Jun", "revenue": 9600, "occupancy": 0.58, "adr": 455},
+        {"month": "Jul", "revenue": 12200, "occupancy": 0.68, "adr": 490},
+        {"month": "Aug", "revenue": 10700, "occupancy": 0.62, "adr": 475},
+        {"month": "Sep", "revenue": 5200, "occupancy": 0.35, "adr": 405},
+        {"month": "Oct", "revenue": 4500, "occupancy": 0.30, "adr": 395},
+        {"month": "Nov", "revenue": 6100, "occupancy": 0.42, "adr": 445},
+        {"month": "Dec", "revenue": 13200, "occupancy": 0.78, "adr": 575}
+      ]
+    },
+    "low": {
+      "revenue": 85000,
+      "occupancy": 0.48,
+      "adr": 465,
+      "monthly": [
+        {"month": "Jan", "revenue": 12700, "occupancy": 0.72, "adr": 555},
+        {"month": "Feb", "revenue": 11500, "occupancy": 0.68, "adr": 530},
+        {"month": "Mar", "revenue": 9600, "occupancy": 0.60, "adr": 500},
+        {"month": "Apr", "revenue": 3000, "occupancy": 0.20, "adr": 360},
+        {"month": "May", "revenue": 2600, "occupancy": 0.18, "adr": 350},
+        {"month": "Jun", "revenue": 6800, "occupancy": 0.45, "adr": 420},
+        {"month": "Jul", "revenue": 8800, "occupancy": 0.55, "adr": 450},
+        {"month": "Aug", "revenue": 7600, "occupancy": 0.50, "adr": 430},
+        {"month": "Sep", "revenue": 3500, "occupancy": 0.25, "adr": 375},
+        {"month": "Oct", "revenue": 3200, "occupancy": 0.22, "adr": 365},
+        {"month": "Nov", "revenue": 4500, "occupancy": 0.32, "adr": 405},
+        {"month": "Dec", "revenue": 11200, "occupancy": 0.68, "adr": 530}
+      ]
+    }
+  },
+  "comparables": [
+    {
+      "source": "market-knowledge",
+      "title": "Fawngrove Condos (avg)",
+      "address": "Deer Valley Drive, Park City",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "annualRevenue": 95000,
+      "occupancyRate": 0.58,
+      "averageDailyRate": 435,
+      "distanceMiles": 0.1
+    },
+    {
+      "source": "market-knowledge",
+      "title": "Lower Deer Valley Townhome",
+      "address": "1375 Deer Valley Drive, Park City",
+      "bedrooms": 2,
+      "bathrooms": 3,
+      "annualRevenue": 105000,
+      "occupancyRate": 0.62,
+      "averageDailyRate": 460,
+      "distanceMiles": 0.3
+    },
+    {
+      "source": "market-knowledge",
+      "title": "Snow Park Village 2BR",
+      "address": "1415 Lowell Ave, Park City",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "annualRevenue": 88000,
+      "occupancyRate": 0.55,
+      "averageDailyRate": 420,
+      "distanceMiles": 0.8
+    },
+    {
+      "source": "market-knowledge",
+      "title": "Pinnacle Townhome",
+      "address": "Deer Valley Drive, Park City",
+      "bedrooms": 3,
+      "bathrooms": 3,
+      "annualRevenue": 132000,
+      "occupancyRate": 0.65,
+      "averageDailyRate": 510,
+      "distanceMiles": 0.5
+    }
+  ],
+  "narrative": "This recently remodeled Fawngrove townhouse in lower Deer Valley is well-positioned for strong STR performance. Its location on the free bus route to Deer Valley and Park City Mountain resorts, combined with the 2025 renovation, hot tub, ski storage, and fully furnished status make it highly attractive to vacation renters. Lower Deer Valley 2BR units typically command premium winter rates ($500-575/night) during ski season with 80-88% occupancy, and solid summer performance ($370-465/night) driven by hiking, mountain biking, and summer events. Shoulder seasons (April-May, September-October) are the weakest periods. The $5,146 quarterly HOA should be factored into net revenue calculations. Note: Comparable data is based on market knowledge — AirDNA/PriceLabs API data was unavailable for this evaluation.",
+  "methodology": "Projections based on Park City Deer Valley submarket performance for 2BR furnished condominiums. High scenario represents 75th percentile performance, medium represents median, and low represents 25th percentile with a new-listing penalty of ~12% on year-1 occupancy. Seasonality weights: Ski season (Dec-Mar) peak, Summer (Jun-Aug) secondary peak, Shoulder (Apr-May, Sep-Nov) low. Comparables sourced from market knowledge in lieu of AirDNA/PriceLabs API data."
+}
