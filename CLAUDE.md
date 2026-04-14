@@ -12,11 +12,12 @@ All paths are relative to: `~/projects/str-revenue-bot/`
 
 You have 5 CLI utilities available via `tsx`:
 
-### Google Sheets (`scripts/sheets.ts`)
+### Database (`scripts/sheets.ts`)
+Backed by Supabase Postgres. The CLI interface uses sheet-style table names for compatibility.
 ```bash
 tsx scripts/sheets.ts read "Listings"  # Read all rows
-tsx scripts/sheets.ts append "Listings" '{"MLS #":"PC12345","Listing Source":"new_listing","Address":"123 Main St"}'  # Append object in schema order
-tsx scripts/sheets.ts update "Evaluations" "2" '{"Eval ID":"uuid","MLS #":"PC12345","Listing Source":"new_listing","BD":4,"BA":3}'  # Update row 2
+tsx scripts/sheets.ts append "Listings" '{"MLS #":"PC12345","Listing Source":"new_listing","Address":"123 Main St"}'  # Append row
+tsx scripts/sheets.ts update "Evaluations" "<eval-id>" '{"Eval ID":"uuid","MLS #":"PC12345","Status":"approved"}'  # Update by primary key
 tsx scripts/sheets.ts find "Listings" "MLS #" "PC12345"  # Find rows by column value
 ```
 
@@ -49,12 +50,12 @@ tsx scripts/download-images.ts PC12345 '["https://photo1.jpg","https://photo2.jp
 ```
 Downloads to `data/images/{mlsNumber}/` and outputs JSON array of local paths.
 
-## Google Sheets Structure
+## Database Structure (Supabase)
 
-The Google Sheet has 5 tabs:
+The Supabase Postgres database has 5 tables (accessible via the Table Editor dashboard for auditing):
 
 ### Listings
-| MLS # | Listing Source | Address | City | Region | Price | BD | BA | SqFt | Type | Amenities (JSON) | STR Eligible | Status | Listing Date | Agent | Photos (JSON) | Lat | Lng | Scraped At |
+| MLS # | Listing Source | Address | City | Region | Price | BD | BA | SqFt | Type | Amenities (JSON) | STR Eligible | Status | Listing Date | Agent | Photos (JSON) | Lat | Lng | Scraped At | Listing URL | Open House (JSON) |
 
 ### Evaluations
 | Eval ID | MLS # | Listing Source | BD | BA | Version | High Rev | Med Rev | Low Rev | High Occ | Med Occ | Low Occ | High ADR | Med ADR | Low ADR | Status | Slack Timestamp | PDF Path | Created At |
@@ -68,9 +69,14 @@ The Google Sheet has 5 tabs:
 ### Adjustments
 | Adj ID | Eval ID | MLS # | Timestamp | Requested By | Request Text | Category | Prior High | Prior Med | Prior Low | New High | New Med | New Low | Delta % | Reasoning |
 
-Categories: `finishes`, `location`, `amenities`, `comps`, `seasonality`, `market`, `owner-usage`, `other`
+Categories: `finishes`, `location`, `amenities`, `comps`, `seasonality`, `market`, `owner-usage`, `hero-photo`, `photo-framing`, `general-direction`, `other`
 
-This tab builds a training set over time. When generating future projections, read past adjustments to identify systematic biases (e.g. if premium finishes consistently get bumped 15-20%, bake that into the initial estimate for similar properties).
+Use this tab for ALL feedback — not just projection numbers. Examples:
+- Projection adjustments: "bump numbers down", "ADR too high" → category `general-direction` or specific category
+- Photo adjustments: "use photo 3 instead", "zoom in more" → category `hero-photo` or `photo-framing`
+- For non-numeric adjustments, Prior/New/Delta fields can be descriptive (e.g. Prior="photo-0.jpg", New="photo-2.jpg")
+
+This tab builds a training set over time. When generating future projections, read past adjustments to identify systematic biases (e.g. if premium finishes consistently get bumped 15-20%, bake that into the initial estimate for similar properties). Photo feedback helps calibrate default hero settings (zoom, focal point, which photo index to use).
 
 ---
 

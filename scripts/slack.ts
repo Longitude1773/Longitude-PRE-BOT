@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 /**
  * Slack API utility — CLI tool for the Claude Code agent to interact with Slack.
  *
@@ -13,19 +15,46 @@
 const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN!;
 const BASE = "https://slack.com/api";
 
+// Methods that require form-urlencoded instead of JSON
+const FORM_METHODS = new Set([
+  "conversations.replies",
+  "conversations.history",
+  "reactions.get",
+  "files.getUploadURLExternal",
+]);
+
+function summarizeSlackContext(body: Record<string, unknown>) {
+  const context = Object.entries(body)
+    .filter(([key]) => !["text", "blocks", "files"].includes(key))
+    .map(([key, value]) => `${key}=${String(value)}`);
+  return context.length > 0 ? ` (${context.join(", ")})` : "";
+}
+
 async function slackApi(method: string, body: Record<string, unknown>) {
+  const useForm = FORM_METHODS.has(method);
+  const formBody = new URLSearchParams(
+    Object.entries(body).map(([key, value]) => [key, String(value)] as [string, string]),
+  );
   const res = await fetch(`${BASE}/${method}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${SLACK_TOKEN}`,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": useForm ? "application/x-www-form-urlencoded" : "application/json; charset=utf-8",
     },
-    body: JSON.stringify(body),
+    body: useForm ? formBody.toString() : JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!data.ok) {
-    console.error(`Slack API error (${method}): ${data.error}`);
-    process.exit(1);
+
+  const raw = await res.text();
+  let data: any;
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Slack API error (${method})${summarizeSlackContext(body)}: non-JSON response (${res.status} ${res.statusText})`);
+  }
+
+  if (!res.ok || !data.ok) {
+    const detail = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(`Slack API error (${method})${summarizeSlackContext(body)}: ${detail}`);
   }
   return data;
 }
@@ -36,33 +65,43 @@ async function slackUpload(method: string, formData: FormData) {
     headers: { Authorization: `Bearer ${SLACK_TOKEN}` },
     body: formData,
   });
-  const data = await res.json();
-  if (!data.ok) {
-    console.error(`Slack API error (${method}): ${data.error}`);
-    process.exit(1);
+
+  const raw = await res.text();
+  let data: any;
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Slack API error (${method}): non-JSON response (${res.status} ${res.statusText})`);
+  }
+
+  if (!res.ok || !data.ok) {
+    const detail = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(`Slack API error (${method}): ${detail}`);
   }
   return data;
 }
 
-async function post(channel: string, text: string, blocksJson?: string) {
+export async function post(channel: string, text: string, blocksJson?: string) {
   const body: Record<string, unknown> = { channel, text };
   if (blocksJson) {
     body.blocks = JSON.parse(blocksJson);
   }
   const data = await slackApi("chat.postMessage", body);
   console.log(JSON.stringify({ ts: data.ts, channel: data.channel }));
+  return data;
 }
 
-async function reply(channel: string, threadTs: string, text: string) {
+export async function reply(channel: string, threadTs: string, text: string) {
   const data = await slackApi("chat.postMessage", {
     channel,
     text,
     thread_ts: threadTs,
   });
   console.log(JSON.stringify({ ts: data.ts, channel: data.channel }));
+  return data;
 }
 
-async function upload(
+export async function upload(
   channel: string,
   filePath: string,
   title?: string,
@@ -73,25 +112,19 @@ async function upload(
   const fileData = readFileSync(filePath);
   const fileName = basename(filePath);
 
-  // Step 1: Get upload URL (this endpoint requires form-urlencoded, not JSON)
-  const params = new URLSearchParams();
-  params.set("filename", fileName);
-  params.set("length", String(fileData.length));
-  const urlRaw = await fetch(`${BASE}/files.getUploadURLExternal`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${SLACK_TOKEN}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
+  // Step 1: Get upload URL
+  const urlRes = await slackApi("files.getUploadURLExternal", {
+    filename: fileName,
+    length: fileData.length,
   });
-  const urlRes = await urlRaw.json();
-  if (!urlRes.ok) {
-    console.error(`Slack API error (files.getUploadURLExternal): ${urlRes.error}`);
-    process.exit(1);
-  }
 
   // Step 2: Upload file content
   const uploadForm = new FormData();
   uploadForm.append("file", new Blob([fileData]), fileName);
-  await fetch(urlRes.upload_url, { method: "POST", body: uploadForm });
+  const uploadRes = await fetch(urlRes.upload_url, { method: "POST", body: uploadForm });
+  if (!uploadRes.ok) {
+    throw new Error(`Slack upload failed (${fileName}): ${uploadRes.status} ${uploadRes.statusText}`);
+  }
 
   // Step 3: Complete upload
   const channelId = channel;
@@ -102,11 +135,12 @@ async function upload(
   if (threadTs) {
     completeBody.thread_ts = threadTs;
   }
-  await slackApi("files.completeUploadExternal", completeBody);
+  const completed = await slackApi("files.completeUploadExternal", completeBody);
   console.log(JSON.stringify({ file_id: urlRes.file_id }));
+  return completed;
 }
 
-async function reactions(channel: string, ts: string) {
+export async function reactions(channel: string, ts: string) {
   const data = await slackApi("reactions.get", {
     channel,
     timestamp: ts,
@@ -115,7 +149,7 @@ async function reactions(channel: string, ts: string) {
   console.log(JSON.stringify(data.message?.reactions || []));
 }
 
-async function replies(channel: string, ts: string) {
+export async function replies(channel: string, ts: string) {
   const data = await slackApi("conversations.replies", {
     channel,
     ts,
@@ -130,7 +164,7 @@ async function replies(channel: string, ts: string) {
   console.log(JSON.stringify(messages, null, 2));
 }
 
-async function history(channel: string, limit?: string) {
+export async function history(channel: string, limit?: string) {
   const data = await slackApi("conversations.history", {
     channel,
     limit: parseInt(limit || "20"),
@@ -147,30 +181,32 @@ async function history(channel: string, limit?: string) {
 }
 
 // CLI entrypoint
-const [, , command, ...args] = process.argv;
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const [, , command, ...args] = process.argv;
 
-switch (command) {
-  case "post":
-    await post(args[0], args[1], args[2]);
-    break;
-  case "reply":
-    await reply(args[0], args[1], args[2]);
-    break;
-  case "upload":
-    await upload(args[0], args[1], args[2], args[3]);
-    break;
-  case "reactions":
-    await reactions(args[0], args[1]);
-    break;
-  case "replies":
-    await replies(args[0], args[1]);
-    break;
-  case "history":
-    await history(args[0], args[1]);
-    break;
-  default:
-    console.error(
-      "Usage: tsx scripts/slack.ts <post|reply|upload|reactions|replies|history> ..."
-    );
-    process.exit(1);
+  switch (command) {
+    case "post":
+      await post(args[0], args[1], args[2]);
+      break;
+    case "reply":
+      await reply(args[0], args[1], args[2]);
+      break;
+    case "upload":
+      await upload(args[0], args[1], args[2], args[3]);
+      break;
+    case "reactions":
+      await reactions(args[0], args[1]);
+      break;
+    case "replies":
+      await replies(args[0], args[1]);
+      break;
+    case "history":
+      await history(args[0], args[1]);
+      break;
+    default:
+      console.error(
+        "Usage: tsx scripts/slack.ts <post|reply|upload|reactions|replies|history> ..."
+      );
+      process.exit(1);
+  }
 }

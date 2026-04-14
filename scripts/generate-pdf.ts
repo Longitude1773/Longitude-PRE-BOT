@@ -168,7 +168,7 @@ const buildHeroOverlay = () => {
   const hero = data.hero || {};
   const centerX = hero.centerX ?? 306;
   const centerY = hero.centerY ?? 165;
-  const photoRadius = hero.photoRadius ?? 55;
+  const photoRadius = hero.photoRadius ?? 60;
   const zoom = hero.zoom ?? 1.15;
   const focalX = hero.focalX ?? 0.5;
   const focalY = hero.focalY ?? 0.5;

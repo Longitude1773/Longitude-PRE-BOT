@@ -1,25 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-import { appendSheetRow } from "./sheets.js";
+import { appendSheetRow } from "./sheets.ts";
 
 type JsonObject = Record<string, unknown>;
 
-type EvalMonthly = {
+export type EvalMonthly = {
   month: string;
   revenue: number;
   occupancy: number;
   adr: number;
 };
 
-type EvalScenario = {
+export type EvalScenario = {
   revenue: number;
   occupancy: number;
   adr: number;
   monthly: EvalMonthly[];
 };
 
-type EvalComparable = {
+export type EvalComparable = {
   source?: string;
   title?: string;
   address?: string;
@@ -31,11 +31,26 @@ type EvalComparable = {
   distanceMiles?: number;
 };
 
-type EvalData = {
+export type EvalData = {
   address?: string;
   mlsNumber?: string | number;
+  listingUrl?: string;
+  listingSource?: string;
+  identifierLabel?: string;
+  nightlyRentalAllowed?: string;
+  nightlyRentalAllowedSource?: string;
+  strApproved?: boolean;
+  price?: number;
   bedrooms?: number;
   bathrooms?: number;
+  squareFootage?: number;
+  propertyType?: string;
+  narrative?: string;
+  methodology?: string;
+  photos?: string[];
+  region?: string;
+  confidence?: string;
+  rentZestimate?: number;
   projections?: {
     high: EvalScenario;
     medium: EvalScenario;
@@ -130,12 +145,13 @@ function deriveCity(address: string) {
   return parts[1] ?? "";
 }
 
-function buildListingRow(input: JsonObject, flags: Record<string, string | boolean>) {
+export function buildListingRow(input: JsonObject, flags: Record<string, string | boolean>) {
   const address = getFirstString(input, ["Address", "address"]);
 
   return {
     "MLS #": getFirstString(input, ["MLS #", "mlsNumber"]),
     "Listing Source": String(flags.source || getFirstString(input, ["Listing Source", "listingSource"]) || "new_listing"),
+    "Listing URL": getFirstString(input, ["Listing URL", "listingUrl"]),
     Address: address,
     City: getFirstString(input, ["City", "city"]) || deriveCity(address),
     Region: getFirstString(input, ["Region", "region"]),
@@ -153,10 +169,11 @@ function buildListingRow(input: JsonObject, flags: Record<string, string | boole
     Lat: getFirstNumber(input, ["Lat", "lat"]),
     Lng: getFirstNumber(input, ["Lng", "lng"]),
     "Scraped At": getFirstString(input, ["Scraped At", "scrapedAt"]) || new Date().toISOString(),
+    "Open House (JSON)": getJsonField(input, ["Open House (JSON)", "openHouse", "openHouses"]),
   };
 }
 
-function buildEvaluationRows(input: EvalData, flags: Record<string, string | boolean>) {
+export function buildEvaluationRows(input: EvalData, flags: Record<string, string | boolean>) {
   if (!input.mlsNumber || !input.projections) {
     throw new Error("Evaluation JSON must include mlsNumber and projections.");
   }
@@ -267,4 +284,6 @@ async function main() {
   usage();
 }
 
-await main();
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
+  await main();
+}

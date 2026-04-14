@@ -8,9 +8,25 @@
     "write-sheet-data": "tsx scripts/write-sheet-data.ts",
     "generate-pdf": "tsx scripts/generate-pdf.ts",
     "download-images": "tsx scripts/download-images.ts",
-    "slack": "tsx scripts/slack.ts"
+    "slack": "tsx scripts/slack.ts",
+    "workflow:approve-eval": "tsx scripts/workflows/approve-eval.ts",
+    "workflow:create-zillow-eval": "tsx scripts/workflows/create-zillow-eval.ts",
+    "workflow:create-on-demand-eval": "tsx scripts/workflows/create-zillow-eval.ts",
+    "workflow:handle-new-eval": "tsx scripts/workflows/handle-new-eval.ts",
+    "workflow:handle-thread-reply": "tsx scripts/workflows/handle-thread-reply.ts",
+    "workflow:post-review": "tsx scripts/workflows/post-review.ts",
+    "workflow:thread-context": "tsx scripts/workflows/thread-context.ts",
+    "workflow:update-market-knowledge": "tsx scripts/workflows/update-market-knowledge.ts",
+    "workflow:status": "tsx scripts/workflows/status.ts",
+    "workflow:mls-status": "tsx scripts/workflows/mls-status.ts",
+    "workflow:submit-mls-2fa": "tsx scripts/workflows/submit-mls-2fa.ts",
+    "watch:mls": "bash scripts/hermes/start-mls-watch.sh",
+    "str:start": "bash scripts/hermes/start-str-stack.sh",
+    "hermes:preflight": "tsx scripts/hermes/preflight.ts",
+    "hermes:start": "bash scripts/hermes/start-gateway.sh"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.102.1",
     "playwright": "^1.50.0"
   },
   "devDependencies": {

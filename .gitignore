@@ -1,7 +1,25 @@
 node_modules/
 dist/
+
+# Local browser/profile artifacts
+.playwright/
+tmp/
+flexmls-*.md
+
+# Generated evaluation artifacts
+data/eval-*.json
+data/listing-*.json
+data/migration/
+
 data/images/
 data/pdfs/
+data/inbox/
 .env
+.hermes.env
+.hermes-runtime/
 *.log
 .DS_Store
+
+# Local template/image scratch outputs
+templates/assets/*
+!templates/assets/background_only.png

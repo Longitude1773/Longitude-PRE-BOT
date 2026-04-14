@@ -1,17 +1,17 @@
 import { fileURLToPath } from "node:url";
 
+import { readTable, insertRow, insertRows, updateByPk, findRows, toDbRow } from "./supabase.ts";
+
 /**
- * Google Sheets utility — calls your Apps Script web app to read/write sheet data.
+ * Google Sheets utility — now backed by Supabase Postgres.
  *
  * Usage:
  *   tsx scripts/sheets.ts read <SheetName>
  *   tsx scripts/sheets.ts append <SheetName> <json-row-or-object>
- *   tsx scripts/sheets.ts update <SheetName> <row-number> <json-row-or-object>
+ *   tsx scripts/sheets.ts append-batch <SheetName> <json-rows-or-objects>
+ *   tsx scripts/sheets.ts update <SheetName> <primary-key-value> <json-row-or-object>
  *   tsx scripts/sheets.ts find <SheetName> <column> <value>
  */
-
-const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL!;
-const SHEETS_TOKEN = process.env.GOOGLE_SHEETS_TOKEN!;
 
 export const SHEET_SCHEMAS: Record<string, string[]> = {
   Listings: [
@@ -34,6 +34,8 @@ export const SHEET_SCHEMAS: Record<string, string[]> = {
     "Lat",
     "Lng",
     "Scraped At",
+    "Listing URL",
+    "Open House (JSON)",
   ],
   Evaluations: [
     "Eval ID",
@@ -100,90 +102,62 @@ export const SHEET_SCHEMAS: Record<string, string[]> = {
   ],
 };
 
-if (!APPS_SCRIPT_URL || !SHEETS_TOKEN) {
-  console.error("Missing GOOGLE_APPS_SCRIPT_URL or GOOGLE_SHEETS_TOKEN env var");
-  process.exit(1);
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function normalizeRowData(sheetName: string, row: unknown) {
   if (Array.isArray(row)) {
-    return row;
+    // Convert array to object using schema
+    const schema = SHEET_SCHEMAS[sheetName];
+    if (!schema) throw new Error(`No schema for sheet "${sheetName}".`);
+    const obj: Record<string, unknown> = {};
+    for (let i = 0; i < schema.length; i++) {
+      obj[schema[i]] = row[i] ?? "";
+    }
+    return obj;
   }
 
   if (!isPlainObject(row)) {
     throw new Error("Row must be a JSON array or object.");
   }
 
-  const schema = SHEET_SCHEMAS[sheetName];
-  if (!schema) {
-    throw new Error(
-      `Object writes are not configured for sheet "${sheetName}". ` +
-      `Use a JSON array or add a schema in scripts/sheets.ts.`
-    );
-  }
-
-  return schema.map((header) => row[header] ?? "");
+  return row;
 }
 
 function normalizeRow(sheetName: string, rowJson: string) {
   return normalizeRowData(sheetName, JSON.parse(rowJson));
 }
 
-export async function callSheet(action: string, params: Record<string, string>) {
-  const url = new URL(APPS_SCRIPT_URL);
-  url.searchParams.set("action", action);
-  url.searchParams.set("token", SHEETS_TOKEN);
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-
-  const res = await fetch(url.toString(), { redirect: "follow" });
-  if (!res.ok) {
-    console.error(`Apps Script error: ${res.status} ${res.statusText}`);
-    process.exit(1);
-  }
-  const data = await res.json();
-  if (data.error) {
-    console.error(`Sheet error: ${data.error}`);
-    process.exit(1);
-  }
-  return data;
-}
-
 export async function readSheet(sheetName: string) {
-  const data = await callSheet("read", { sheet: sheetName });
-  return data.rows;
+  return readTable(sheetName);
 }
 
 export async function appendSheetRow(sheetName: string, rowData: string | unknown) {
-  const row = typeof rowData === "string" ? normalizeRow(sheetName, rowData) : normalizeRowData(sheetName, rowData);
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "append", sheet: sheetName, row, token: SHEETS_TOKEN }),
-    redirect: "follow",
-  });
-  return await res.json();
+  const row = typeof rowData === "string"
+    ? normalizeRow(sheetName, rowData)
+    : normalizeRowData(sheetName, rowData);
+  return insertRow(sheetName, row as Record<string, unknown>);
 }
 
-export async function updateSheetRow(sheetName: string, rowNumber: string | number, rowData: string | unknown) {
-  const row = typeof rowData === "string" ? normalizeRow(sheetName, rowData) : normalizeRowData(sheetName, rowData);
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "update", sheet: sheetName, rowNumber: parseInt(String(rowNumber)), row, token: SHEETS_TOKEN }),
-    redirect: "follow",
-  });
-  return await res.json();
+export async function appendSheetRows(sheetName: string, rowsData: string | unknown[]) {
+  const parsedRows = typeof rowsData === "string" ? JSON.parse(rowsData) : rowsData;
+  if (!Array.isArray(parsedRows) || parsedRows.length === 0) {
+    throw new Error("Batch rows must be a non-empty array.");
+  }
+  const rows = parsedRows.map((row) => normalizeRowData(sheetName, row) as Record<string, unknown>);
+  return insertRows(sheetName, rows);
+}
+
+export async function updateSheetRow(sheetName: string, primaryKey: string | number, rowData: string | unknown) {
+  const row = typeof rowData === "string"
+    ? normalizeRow(sheetName, rowData)
+    : normalizeRowData(sheetName, rowData);
+  return updateByPk(sheetName, primaryKey, row as Record<string, unknown>);
 }
 
 export async function findSheetRows(sheetName: string, column: string, value: string) {
-  const data = await callSheet("find", { sheet: sheetName, column, value });
-  return data.matches;
+  return findRows(sheetName, column, value);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -196,6 +170,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     case "append":
       console.log((await appendSheetRow(args[0], args[1])).message || "Appended");
       break;
+    case "append-batch":
+      console.log((await appendSheetRows(args[0], args[1])).message || "Appended batch");
+      break;
     case "update":
       console.log((await updateSheetRow(args[0], args[1], args[2])).message || "Updated");
       break;
@@ -203,7 +180,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       console.log(JSON.stringify(await findSheetRows(args[0], args[1], args[2]), null, 2));
       break;
     default:
-      console.error("Usage: tsx scripts/sheets.ts <read|append|update|find> ...");
+      console.error("Usage: tsx scripts/sheets.ts <read|append|append-batch|update|find> ...");
       process.exit(1);
   }
 }
