@@ -111,7 +111,7 @@ echo "Watcher log: $WATCHER_LOG_FILE"
 echo "Gateway pid file: $GATEWAY_PID_FILE"
 echo "Watcher pid file: $WATCHER_PID_FILE"
 echo "Check gateway: ps -ef | grep 'python3 -m gateway.run' | grep -v grep"
-echo "Check watcher: ps -ef | grep 'watch-mls.ts\\|flexmls-profile' | grep -v grep"
+echo "Check watcher: ps -ef | grep 'watch-mls.ts\\|flexmls-profile\\|zillow-profile' | grep -v grep"
 echo
 echo "Streaming logs. Ctrl+C stops log tailing, not the background processes."
 

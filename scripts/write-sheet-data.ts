@@ -31,6 +31,21 @@ export type EvalComparable = {
   distanceMiles?: number;
 };
 
+export type EvalGroundingSource = {
+  kind?: string;
+  label?: string;
+  url?: string;
+  tool?: string;
+  note?: string;
+};
+
+export type EvalGrounding = {
+  summary?: string;
+  sources?: EvalGroundingSource[];
+};
+
+export type EvalDecision = "estimate" | "escalate";
+
 export type EvalData = {
   address?: string;
   mlsNumber?: string | number;
@@ -47,10 +62,13 @@ export type EvalData = {
   propertyType?: string;
   narrative?: string;
   methodology?: string;
+  decision?: EvalDecision;
+  decisionReason?: string;
   photos?: string[];
   region?: string;
   confidence?: string;
   rentZestimate?: number;
+  grounding?: EvalGrounding;
   projections?: {
     high: EvalScenario;
     medium: EvalScenario;

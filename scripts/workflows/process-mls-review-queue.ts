@@ -475,7 +475,7 @@ async function processQueue() {
 
       pendingPosts.push({
         item,
-        address: evalData.address,
+        address: evalData.address || item.displayAddress || item.mlsNumber,
         region,
         mediumRevenue: projections.medium.revenue,
       });

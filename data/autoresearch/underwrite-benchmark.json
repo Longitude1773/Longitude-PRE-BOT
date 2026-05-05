@@ -1,0 +1,1820 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-16T22:11:43.290Z",
+  "description": "Frozen underwriting benchmark built from checked-in listing/eval artifact pairs. Manual thread edits and malformed source data are excluded so the metric stays anchored to initial automatic underwriting.",
+  "metric": {
+    "name": "composite_error",
+    "direction": "lower",
+    "formula": "mean(revenue_mape) + 0.5 * mean(adr_mape) + 2.0 * mean(occupancy_mae)"
+  },
+  "exclusions": [
+    {
+      "id": "12501851",
+      "reason": "manual_adjustment"
+    },
+    {
+      "id": "12601192",
+      "reason": "missing_pair"
+    },
+    {
+      "id": "ZPID-122537467",
+      "reason": "malformed_rent_zestimate"
+    }
+  ],
+  "cases": [
+    {
+      "id": "12600268",
+      "sourceListingPath": "data/listing-12600268.json",
+      "sourceEvalPath": "data/eval-12600268.json",
+      "input": {
+        "listingId": "12600268",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "300 Deer Valley Drive, Unit #:, Residence A Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720251230204854539025000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Residence A Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 6995000,
+        "bedrooms": 4,
+        "bathrooms": 5,
+        "squareFootage": 4881,
+        "propertyType": "Condominium",
+        "area": "01 - Old Town",
+        "subdivision": "Roundabout",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_text",
+        "strApproved": true,
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.645279,
+        "longitude": -111.493815
+      },
+      "target": {
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 304135,
+            "occupancy": 0.711,
+            "adr": 1450
+          },
+          "medium": {
+            "revenue": 228374,
+            "occupancy": 0.621,
+            "adr": 1200
+          },
+          "low": {
+            "revenue": 173244,
+            "occupancy": 0.513,
+            "adr": 1100
+          }
+        }
+      }
+    },
+    {
+      "id": "12601253",
+      "sourceListingPath": "data/listing-12601253.json",
+      "sourceEvalPath": "data/eval-12601253.json",
+      "input": {
+        "listingId": "12601253",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Park Lane Unit 53, Park City, UT 84098",
+        "listingUrl": "",
+        "city": "Park City",
+        "price": 8250006169,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1249,
+        "propertyType": "Condominium / Townhouse",
+        "area": "14 - KimballNewpark Terrace",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 89810,
+            "occupancy": 0.7,
+            "adr": 420
+          },
+          "medium": {
+            "revenue": 69017,
+            "occupancy": 0.6,
+            "adr": 375
+          },
+          "low": {
+            "revenue": 48562,
+            "occupancy": 0.48,
+            "adr": 330
+          }
+        }
+      }
+    },
+    {
+      "id": "12601254",
+      "sourceListingPath": "data/listing-12601254.json",
+      "sourceEvalPath": "data/eval-12601254.json",
+      "input": {
+        "listingId": "12601254",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "2780 Gallivan Loop 32, Park City, UT 84060",
+        "listingUrl": "",
+        "city": "Park City",
+        "price": 2895000,
+        "bedrooms": 5,
+        "bathrooms": 6,
+        "squareFootage": 3976,
+        "propertyType": "Condominium / Townhouse",
+        "area": "09 - Park Meadows",
+        "subdivision": "Cove At Eagle Mountain"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 230492,
+            "occupancy": 0.71,
+            "adr": 1065
+          },
+          "medium": {
+            "revenue": 177861,
+            "occupancy": 0.61,
+            "adr": 951
+          },
+          "low": {
+            "revenue": 125760,
+            "occupancy": 0.49,
+            "adr": 837
+          }
+        }
+      }
+    },
+    {
+      "id": "12601255",
+      "sourceListingPath": "data/listing-12601255.json",
+      "sourceEvalPath": "data/eval-12601255.json",
+      "input": {
+        "listingId": "12601255",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Silver Spur CirclePark City, UT 84098",
+        "listingUrl": "",
+        "city": "Silver Spur CirclePark City",
+        "price": 14950003861,
+        "bedrooms": 4,
+        "bathrooms": 3,
+        "squareFootage": 3450,
+        "propertyType": "Single Family",
+        "area": "Silver Spur Circle17 - Jeremy RanchJeremy Ranch Area",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 155243,
+            "occupancy": 0.7,
+            "adr": 726
+          },
+          "medium": {
+            "revenue": 119242,
+            "occupancy": 0.6,
+            "adr": 648
+          },
+          "low": {
+            "revenue": 83908,
+            "occupancy": 0.48,
+            "adr": 570
+          }
+        }
+      }
+    },
+    {
+      "id": "12601256",
+      "sourceListingPath": "data/listing-12601256.json",
+      "sourceEvalPath": "data/eval-12601256.json",
+      "input": {
+        "listingId": "12601256",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "W Ascent DriveHideout, UT 84036",
+        "listingUrl": "",
+        "city": "W Ascent DriveHideout",
+        "price": 1074420372,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2239,
+        "propertyType": "Condominium / Townhouse",
+        "area": "W Ascent Drive29 - HideoutDeer Springs",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 183845,
+            "occupancy": 0.73,
+            "adr": 832
+          },
+          "medium": {
+            "revenue": 143522,
+            "occupancy": 0.63,
+            "adr": 743
+          },
+          "low": {
+            "revenue": 102093,
+            "occupancy": 0.51,
+            "adr": 653
+          }
+        }
+      }
+    },
+    {
+      "id": "12601259",
+      "sourceListingPath": "data/listing-12601259.json",
+      "sourceEvalPath": "data/eval-12601259.json",
+      "input": {
+        "listingId": "12601259",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "E Cottonwood LaneHeber City, UT 84032",
+        "listingUrl": "https://www.flexmls.com/share/DiplJ/10745-E-Cottonwood-Lane-Heber-City-UT-84032",
+        "city": "E Cottonwood LaneHeber City",
+        "price": 59500010745,
+        "bedrooms": 2,
+        "bathrooms": 1,
+        "squareFootage": 1478,
+        "propertyType": "Single Family",
+        "area": "E Cottonwood Lane38 - Timber LakesTimberlakes Area",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 109284,
+            "occupancy": 0.67,
+            "adr": 532
+          },
+          "medium": {
+            "revenue": 83066,
+            "occupancy": 0.57,
+            "adr": 475
+          },
+          "low": {
+            "revenue": 57689,
+            "occupancy": 0.45,
+            "adr": 418
+          }
+        }
+      }
+    },
+    {
+      "id": "12601260",
+      "sourceListingPath": "data/listing-12601260.json",
+      "sourceEvalPath": "data/eval-12601260.json",
+      "input": {
+        "listingId": "12601260",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "W 360, NKamas, UT 84036",
+        "listingUrl": "https://www.flexmls.com/share/DiplV/263-W-360-N-Kamas-UT-84036",
+        "city": "NKamas",
+        "price": 875000263,
+        "bedrooms": 6,
+        "bathrooms": 4,
+        "squareFootage": 3600,
+        "propertyType": "Single Family",
+        "area": "N51 - Kamas & MarionGrassy Creek",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 145839,
+            "occupancy": 0.67,
+            "adr": 710
+          },
+          "medium": {
+            "revenue": 110805,
+            "occupancy": 0.57,
+            "adr": 634
+          },
+          "low": {
+            "revenue": 77006,
+            "occupancy": 0.45,
+            "adr": 558
+          }
+        }
+      }
+    },
+    {
+      "id": "12601262",
+      "sourceListingPath": "data/listing-12601262.json",
+      "sourceEvalPath": "data/eval-12601262.json",
+      "input": {
+        "listingId": "12601262",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "8254 N Sandalwood Lane, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipkp/8254-N-Sandalwood-Lane-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 1275000,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 1581,
+        "propertyType": "Condominium / Townhouse",
+        "area": "15 - Pinebrook",
+        "subdivision": "Discovery Ridge"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 123239,
+            "occupancy": 0.68,
+            "adr": 591
+          },
+          "medium": {
+            "revenue": 93909,
+            "occupancy": 0.58,
+            "adr": 528
+          },
+          "low": {
+            "revenue": 65608,
+            "occupancy": 0.46,
+            "adr": 465
+          }
+        }
+      }
+    },
+    {
+      "id": "12601263",
+      "sourceListingPath": "data/listing-12601263.json",
+      "sourceEvalPath": "data/eval-12601263.json",
+      "input": {
+        "listingId": "12601263",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Hidden Cove RoadPark City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipl2/8730-Hidden-Cove-Road-Park-City-UT-84098",
+        "city": "Hidden Cove RoadPark City",
+        "price": 14900008730,
+        "bedrooms": 4,
+        "bathrooms": 4,
+        "squareFootage": 2597,
+        "propertyType": "Single Family",
+        "area": "Hidden Cove Road17 - Jeremy RanchJeremy Ranch Area",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 155243,
+            "occupancy": 0.7,
+            "adr": 726
+          },
+          "medium": {
+            "revenue": 119242,
+            "occupancy": 0.6,
+            "adr": 648
+          },
+          "low": {
+            "revenue": 83908,
+            "occupancy": 0.48,
+            "adr": 570
+          }
+        }
+      }
+    },
+    {
+      "id": "12601264",
+      "sourceListingPath": "data/listing-12601264.json",
+      "sourceEvalPath": "data/eval-12601264.json",
+      "input": {
+        "listingId": "12601264",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Willow Draw Drive Unit 904, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipki/4264-Willow-Draw-Drive-Unit-904-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 17950004264,
+        "bedrooms": 2,
+        "bathrooms": 3,
+        "squareFootage": 1343,
+        "propertyType": "Condominium / Townhouse",
+        "area": "10 - Canyons VillageJuniper Landing",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 186068,
+            "occupancy": 0.79,
+            "adr": 798
+          },
+          "medium": {
+            "revenue": 150583,
+            "occupancy": 0.69,
+            "adr": 713
+          },
+          "low": {
+            "revenue": 109603,
+            "occupancy": 0.57,
+            "adr": 627
+          }
+        }
+      }
+    },
+    {
+      "id": "12601265",
+      "sourceListingPath": "data/listing-12601265.json",
+      "sourceEvalPath": "data/eval-12601265.json",
+      "input": {
+        "listingId": "12601265",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "S Calamity LanePark City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DipkU/3073-S-Calamity-Lane-Park-City-UT-84060",
+        "city": "S Calamity LanePark City",
+        "price": 42500003073,
+        "bedrooms": 5,
+        "bathrooms": 5,
+        "squareFootage": 6093,
+        "propertyType": "Single Family",
+        "area": "S Calamity Lane08 - ProspectorPark City Heights",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 325708,
+            "occupancy": 0.73,
+            "adr": 1474
+          },
+          "medium": {
+            "revenue": 254250,
+            "occupancy": 0.63,
+            "adr": 1316
+          },
+          "low": {
+            "revenue": 181100,
+            "occupancy": 0.51,
+            "adr": 1158
+          }
+        }
+      }
+    },
+    {
+      "id": "12601266",
+      "sourceListingPath": "data/listing-12601266.json",
+      "sourceEvalPath": "data/eval-12601266.json",
+      "input": {
+        "listingId": "12601266",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "Residential Park City Detail-Private 1825 Three Kings Drive, Unit #: 804, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260315165539795924000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 0,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 1928,
+        "propertyType": "Condominium",
+        "area": "01 - Old Town",
+        "subdivision": "Silver Star - Spiro Condominiums",
+        "nightlyRentalAllowed": "Property Description",
+        "nightlyRentalAllowedSource": "mls_detail_field",
+        "strApproved": false,
+        "openHouses": [],
+        "rentZestimate": 0
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 123239,
+            "occupancy": 0.68,
+            "adr": 591
+          },
+          "medium": {
+            "revenue": 93909,
+            "occupancy": 0.58,
+            "adr": 528
+          },
+          "low": {
+            "revenue": 65608,
+            "occupancy": 0.46,
+            "adr": 465
+          }
+        }
+      }
+    },
+    {
+      "id": "12601267",
+      "sourceListingPath": "data/listing-12601267.json",
+      "sourceEvalPath": "data/eval-12601267.json",
+      "input": {
+        "listingId": "12601267",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "White Pine Canyon RoadPark City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/Dipkb/39-White-Pine-Canyon-Road-Park-City-UT-84060",
+        "city": "White Pine Canyon RoadPark City",
+        "price": 1299500039,
+        "bedrooms": 6,
+        "bathrooms": 7,
+        "squareFootage": 9021,
+        "propertyType": "Single Family",
+        "area": "White Pine Canyon Road10 - Canyons VillageColony At White Pine Canyon",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 362799,
+            "occupancy": 0.79,
+            "adr": 1556
+          },
+          "medium": {
+            "revenue": 293366,
+            "occupancy": 0.69,
+            "adr": 1389
+          },
+          "low": {
+            "revenue": 213734,
+            "occupancy": 0.57,
+            "adr": 1223
+          }
+        }
+      }
+    },
+    {
+      "id": "12601270",
+      "sourceListingPath": "data/listing-12601270.json",
+      "sourceEvalPath": "data/eval-12601270.json",
+      "input": {
+        "listingId": "12601270",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Marsac Avenue 21, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DipkB/8789-Marsac-Avenue-21-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 59500008789,
+        "bedrooms": 4,
+        "bathrooms": 5,
+        "squareFootage": 2920,
+        "propertyType": "Condominium / Townhouse",
+        "area": "06 - Empire PassIronwood",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 270737,
+            "occupancy": 0.73,
+            "adr": 1225
+          },
+          "medium": {
+            "revenue": 211330,
+            "occupancy": 0.63,
+            "adr": 1094
+          },
+          "low": {
+            "revenue": 150427,
+            "occupancy": 0.51,
+            "adr": 962
+          }
+        }
+      }
+    },
+    {
+      "id": "12601277",
+      "sourceListingPath": "data/listing-12601277.json",
+      "sourceEvalPath": "data/eval-12601277.json",
+      "input": {
+        "listingId": "12601277",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "10256 N Basin Canyon Road, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipl7/10256-N-Basin-Canyon-Road-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 2375000,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2924,
+        "propertyType": "Single Family",
+        "area": "18 - Glenwild",
+        "subdivision": "Stagecoach Estates"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        }
+      }
+    },
+    {
+      "id": "12601280",
+      "sourceListingPath": "data/listing-12601280.json",
+      "sourceEvalPath": "data/eval-12601280.json",
+      "input": {
+        "listingId": "12601280",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "N Abajo Peak Loop Q2, Heber City, UT 84032",
+        "listingUrl": "https://www.flexmls.com/share/DiplC/402-N-Abajo-Peak-Loop-Q2-Heber-City-UT-84032",
+        "city": "Heber City",
+        "price": 1773250402,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2211,
+        "propertyType": "Condominium / Townhouse",
+        "area": "33 - Red LedgesRed Ledges",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 144221,
+            "occupancy": 0.67,
+            "adr": 702
+          },
+          "medium": {
+            "revenue": 109603,
+            "occupancy": 0.57,
+            "adr": 627
+          },
+          "low": {
+            "revenue": 76149,
+            "occupancy": 0.45,
+            "adr": 552
+          }
+        }
+      }
+    },
+    {
+      "id": "12601281",
+      "sourceListingPath": "data/listing-12601281.json",
+      "sourceEvalPath": "data/eval-12601281.json",
+      "input": {
+        "listingId": "12601281",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Paddington Drive 11, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DipkH/1967-Paddington-Drive-11-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 14850001967,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2085,
+        "propertyType": "Condominium / Townhouse",
+        "area": "08 - ProspectorCanyon Crossing",
+        "subdivision": "TH"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 220551,
+            "occupancy": 0.73,
+            "adr": 998
+          },
+          "medium": {
+            "revenue": 172131,
+            "occupancy": 0.63,
+            "adr": 891
+          },
+          "low": {
+            "revenue": 122580,
+            "occupancy": 0.51,
+            "adr": 784
+          }
+        }
+      }
+    },
+    {
+      "id": "12601283",
+      "sourceListingPath": "data/listing-12601283.json",
+      "sourceEvalPath": "data/eval-12601283.json",
+      "input": {
+        "listingId": "12601283",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "Pinebrook RoadPark City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipkx/7294-Pinebrook-Road-Park-City-UT-84098",
+        "city": "Pinebrook RoadPark City",
+        "price": 22950007294,
+        "bedrooms": 4,
+        "bathrooms": 4,
+        "squareFootage": 4393,
+        "propertyType": "Single Family",
+        "area": "Pinebrook Road15 - PinebrookPinebrook",
+        "subdivision": "DT"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 147481,
+            "occupancy": 0.7,
+            "adr": 690
+          },
+          "medium": {
+            "revenue": 113280,
+            "occupancy": 0.6,
+            "adr": 616
+          },
+          "low": {
+            "revenue": 79713,
+            "occupancy": 0.48,
+            "adr": 542
+          }
+        }
+      }
+    },
+    {
+      "id": "12601288",
+      "sourceListingPath": "data/listing-12601288.json",
+      "sourceEvalPath": "data/eval-12601288.json",
+      "input": {
+        "listingId": "12601288",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "720 Deer Valley Drive Unit 2, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DixSv/720-Deer-Valley-Drive-Unit-2-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 1500000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1137,
+        "propertyType": "Condominium / Townhouse",
+        "area": "01 - Old Town",
+        "subdivision": "Foxglove Cottages"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 101970,
+            "occupancy": 0.77,
+            "adr": 444
+          },
+          "medium": {
+            "revenue": 81550,
+            "occupancy": 0.67,
+            "adr": 396
+          },
+          "low": {
+            "revenue": 58858,
+            "occupancy": 0.55,
+            "adr": 348
+          }
+        }
+      }
+    },
+    {
+      "id": "12601290",
+      "sourceListingPath": "data/listing-12601290.json",
+      "sourceEvalPath": "data/eval-12601290.json",
+      "input": {
+        "listingId": "12601290",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "8544 N Promontory Ranch Rd, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/DiyzR/8544-N-Promontory-Ranch-Rd-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 15500000,
+        "bedrooms": 6,
+        "bathrooms": 8,
+        "squareFootage": 10334,
+        "propertyType": "Single Family",
+        "area": "22 - Promontory",
+        "subdivision": "Deer Crossing"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 325708,
+            "occupancy": 0.73,
+            "adr": 1474
+          },
+          "medium": {
+            "revenue": 254250,
+            "occupancy": 0.63,
+            "adr": 1316
+          },
+          "low": {
+            "revenue": 181100,
+            "occupancy": 0.51,
+            "adr": 1158
+          }
+        }
+      }
+    },
+    {
+      "id": "12601291",
+      "sourceListingPath": "data/listing-12601291.json",
+      "sourceEvalPath": "data/eval-12601291.json",
+      "input": {
+        "listingId": "12601291",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "943 Hart Loop, Kamas, UT 84036",
+        "listingUrl": "https://www.flexmls.com/share/DizrI/943-Hart-Loop-Kamas-UT-84036",
+        "city": "Kamas",
+        "price": 1785000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2616,
+        "propertyType": "Single Family",
+        "area": "50 - Woodland and Fr",
+        "subdivision": "Hart Crossing"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 95652,
+            "occupancy": 0.65,
+            "adr": 480
+          },
+          "medium": {
+            "revenue": 72342,
+            "occupancy": 0.55,
+            "adr": 429
+          },
+          "low": {
+            "revenue": 49929,
+            "occupancy": 0.43,
+            "adr": 378
+          }
+        }
+      }
+    },
+    {
+      "id": "12601292",
+      "sourceListingPath": "data/listing-12601292.json",
+      "sourceEvalPath": "data/eval-12601292.json",
+      "input": {
+        "listingId": "12601292",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1800 W Fox Bay Drive Unit C301, Heber City, UT 84032",
+        "listingUrl": "https://www.flexmls.com/share/Dj16P/1800-W-Fox-Bay-Drive-Unit-C301-Heber-City-UT-84032",
+        "city": "Heber City",
+        "price": 679000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1028,
+        "propertyType": "Condominium",
+        "area": "24-Mayflower-Jord'll",
+        "subdivision": "Fox Bay"
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 81748,
+            "occupancy": 0.68,
+            "adr": 392
+          },
+          "medium": {
+            "revenue": 62268,
+            "occupancy": 0.58,
+            "adr": 350
+          },
+          "low": {
+            "revenue": 43436,
+            "occupancy": 0.46,
+            "adr": 308
+          }
+        }
+      }
+    },
+    {
+      "id": "12601355",
+      "sourceListingPath": "data/listing-12601355.json",
+      "sourceEvalPath": "data/eval-12601355.json",
+      "input": {
+        "listingId": "12601355",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1415 Lowell Avenue 265, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/Dkm2Z/1415-Lowell-Avenue-265-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 1776000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1268,
+        "propertyType": "Condominium",
+        "area": "01 - Old Town",
+        "subdivision": "Resort Center",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 167072,
+            "occupancy": 0.73,
+            "adr": 756
+          },
+          "medium": {
+            "revenue": 130421,
+            "occupancy": 0.63,
+            "adr": 675
+          },
+          "low": {
+            "revenue": 92885,
+            "occupancy": 0.51,
+            "adr": 594
+          }
+        }
+      }
+    },
+    {
+      "id": "12601360",
+      "sourceListingPath": "data/listing-12601360.json",
+      "sourceEvalPath": "data/eval-12601360.json",
+      "input": {
+        "listingId": "12601360",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "3238 Big Spruce Way, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dkm2g/3238-Big-Spruce-Way-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 2685000,
+        "bedrooms": 5,
+        "bathrooms": 5,
+        "squareFootage": 6401,
+        "propertyType": "Single Family",
+        "area": "15 - Pinebrook",
+        "subdivision": "Ecker Hill",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": [
+          {
+            "date": "Wednesday, April 8 2026",
+            "time": "12:00 PM to 3:00 PM",
+            "hostedBy": ""
+          }
+        ]
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 182217,
+            "occupancy": 0.68,
+            "adr": 874
+          },
+          "medium": {
+            "revenue": 133370,
+            "occupancy": 0.58,
+            "adr": 750
+          },
+          "low": {
+            "revenue": 96766,
+            "occupancy": 0.46,
+            "adr": 686
+          }
+        }
+      }
+    },
+    {
+      "id": "12601362",
+      "sourceListingPath": "data/listing-12601362.json",
+      "sourceEvalPath": "data/eval-12601362.json",
+      "input": {
+        "listingId": "12601362",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "2100 Canyons Resort Drive 3b, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dkm2e/2100-Canyons-Resort-Drive-3b-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 1250000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1296,
+        "propertyType": "Condominium / Townhouse",
+        "area": "10 - Canyons Village",
+        "subdivision": "Park West/Hidden Creek",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": [
+          {
+            "date": "Saturday, April 11 2026",
+            "time": "11:00 AM to 12:00 PM",
+            "hostedBy": ""
+          }
+        ]
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 131734,
+            "occupancy": 0.77,
+            "adr": 574
+          },
+          "medium": {
+            "revenue": 105395,
+            "occupancy": 0.67,
+            "adr": 513
+          },
+          "low": {
+            "revenue": 76044,
+            "occupancy": 0.55,
+            "adr": 451
+          }
+        }
+      }
+    },
+    {
+      "id": "12601380",
+      "sourceListingPath": "data/listing-12601380.json",
+      "sourceEvalPath": "data/eval-12601380.json",
+      "input": {
+        "listingId": "12601380",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "2787 Gallivan Loop, Park City, UT 84060",
+        "listingUrl": "https://my.flexmls.com/CameronBrockbank/search/shared_links/Dkm2c/listings/20260324195630069203000000",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 3100000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2801,
+        "propertyType": "Condominium",
+        "area": "09 - Park Meadows",
+        "subdivision": "Cove At Eagle Mountain",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_field",
+        "strApproved": true,
+        "openHouses": [
+          {
+            "date": "Wednesday, April 15, 2026",
+            "time": "12:00pm - 3:00pm",
+            "hostedBy": "Page Juliano"
+          }
+        ],
+        "rentZestimate": 0,
+        "latitude": 40.684459,
+        "longitude": -111.499573
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 99833,
+            "occupancy": 0.568,
+            "adr": 577
+          },
+          "medium": {
+            "revenue": 76982,
+            "occupancy": 0.488,
+            "adr": 515
+          },
+          "low": {
+            "revenue": 54541,
+            "occupancy": 0.392,
+            "adr": 453
+          }
+        }
+      }
+    },
+    {
+      "id": "12601381",
+      "sourceListingPath": "data/listing-12601381.json",
+      "sourceEvalPath": "data/eval-12601381.json",
+      "input": {
+        "listingId": "12601381",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1951 W Osprey, Heber City, UT 84032",
+        "listingUrl": "https://www.flexmls.com/share/Dkm2k/1951-W-Osprey-Heber-City-UT-84032",
+        "city": "Heber City",
+        "price": 2149990,
+        "bedrooms": 4,
+        "bathrooms": 6,
+        "squareFootage": 2949,
+        "propertyType": "Condominium / Townhouse",
+        "area": "24-Mayflower-Jord'll",
+        "subdivision": "Sage Hen",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 166847,
+            "occupancy": 0.71,
+            "adr": 771
+          },
+          "medium": {
+            "revenue": 128890,
+            "occupancy": 0.61,
+            "adr": 689
+          },
+          "low": {
+            "revenue": 91063,
+            "occupancy": 0.49,
+            "adr": 606
+          }
+        }
+      }
+    },
+    {
+      "id": "12601387",
+      "sourceListingPath": "data/listing-12601387.json",
+      "sourceEvalPath": "data/eval-12601387.json",
+      "input": {
+        "listingId": "12601387",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1940 Prospector Avenue 113, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DktOE/1940-Prospector-Avenue-113-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 385000,
+        "bedrooms": 1,
+        "bathrooms": 1,
+        "squareFootage": 510,
+        "propertyType": "Condominium",
+        "area": "08 - Prospector",
+        "subdivision": "Carriage House",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 32880,
+            "occupancy": 0.68,
+            "adr": 158
+          },
+          "medium": {
+            "revenue": 25000,
+            "occupancy": 0.58,
+            "adr": 141
+          },
+          "low": {
+            "revenue": 17437,
+            "occupancy": 0.46,
+            "adr": 124
+          }
+        }
+      }
+    },
+    {
+      "id": "12601389",
+      "sourceListingPath": "data/listing-12601389.json",
+      "sourceEvalPath": "data/eval-12601389.json",
+      "input": {
+        "listingId": "12601389",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "6942 Golden Bear Loop W, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/DkvIu/6942-Golden-Bear-Loop-W-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 2950000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2725,
+        "propertyType": "Single Family",
+        "area": "22 - Promontory",
+        "subdivision": "Villas at Painted Valley",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        }
+      }
+    },
+    {
+      "id": "12601391",
+      "sourceListingPath": "data/listing-12601391.json",
+      "sourceEvalPath": "data/eval-12601391.json",
+      "input": {
+        "listingId": "12601391",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1702 W Glencoe Mountain Way Unit 6006, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/Dkyes/1702-W-Glencoe-Mountain-Way-Unit-6006-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 1500000,
+        "bedrooms": 1,
+        "bathrooms": 1,
+        "squareFootage": 777,
+        "propertyType": "Condominium",
+        "area": "28 - DV East Village",
+        "subdivision": "The Residences at Grand Hyatt Deer Valley",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 145985,
+            "occupancy": 0.79,
+            "adr": 626
+          },
+          "medium": {
+            "revenue": 118064,
+            "occupancy": 0.69,
+            "adr": 559
+          },
+          "low": {
+            "revenue": 86000,
+            "occupancy": 0.57,
+            "adr": 492
+          }
+        }
+      }
+    },
+    {
+      "id": "12601392",
+      "sourceListingPath": "data/listing-12601392.json",
+      "sourceEvalPath": "data/eval-12601392.json",
+      "input": {
+        "listingId": "12601392",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1700 Three Kings Drive 188, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/Dkzp6/1700-Three-Kings-Drive-188-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 2350000,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2038,
+        "propertyType": "Condominium / Townhouse",
+        "area": "01 - Old Town",
+        "subdivision": "Three Kings",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        }
+      }
+    },
+    {
+      "id": "12601393",
+      "sourceListingPath": "data/listing-12601393.json",
+      "sourceEvalPath": "data/eval-12601393.json",
+      "input": {
+        "listingId": "12601393",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "7447 Royal Street, Unit #: 252, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260406174915305158000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 1950000,
+        "bedrooms": 2,
+        "bathrooms": 3,
+        "squareFootage": 1502,
+        "propertyType": "Condominium",
+        "area": "05 - Upper Deer Valley Resort",
+        "subdivision": "Black Bear Lodge",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_text",
+        "strApproved": true,
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.623583,
+        "longitude": -111.489742
+      },
+      "target": {
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 113724,
+            "occupancy": 0.77,
+            "adr": 495
+          },
+          "medium": {
+            "revenue": 90979,
+            "occupancy": 0.55,
+            "adr": 540
+          },
+          "low": {
+            "revenue": 68234,
+            "occupancy": 0.55,
+            "adr": 404
+          }
+        }
+      }
+    },
+    {
+      "id": "12601407",
+      "sourceListingPath": "data/listing-12601407.json",
+      "sourceEvalPath": "data/eval-12601407.json",
+      "input": {
+        "listingId": "12601407",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "389 W Ascent Drive, Hideout, UT 84036",
+        "listingUrl": "https://www.flexmls.com/share/DlKUi/389-W-Ascent-Drive-Hideout-UT-84036",
+        "city": "Hideout",
+        "price": 1225000,
+        "bedrooms": 4,
+        "bathrooms": 4,
+        "squareFootage": 3077,
+        "propertyType": "Condominium / Townhouse",
+        "area": "29 - Hideout",
+        "subdivision": "Deer Springs",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 150162,
+            "occupancy": 0.71,
+            "adr": 694
+          },
+          "medium": {
+            "revenue": 116001,
+            "occupancy": 0.61,
+            "adr": 620
+          },
+          "low": {
+            "revenue": 81957,
+            "occupancy": 0.49,
+            "adr": 545
+          }
+        }
+      }
+    },
+    {
+      "id": "12601408",
+      "sourceListingPath": "data/listing-12601408.json",
+      "sourceEvalPath": "data/eval-12601408.json",
+      "input": {
+        "listingId": "12601408",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "383 W Ascent Drive, Hideout, UT 84036",
+        "listingUrl": "https://www.flexmls.com/share/DlM9c/383-W-Ascent-Drive-Hideout-UT-84036",
+        "city": "Hideout",
+        "price": 1250000,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2886,
+        "propertyType": "Condominium / Townhouse",
+        "area": "29 - Hideout",
+        "subdivision": "Deer Springs",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 107811,
+            "occupancy": 0.68,
+            "adr": 517
+          },
+          "medium": {
+            "revenue": 82152,
+            "occupancy": 0.58,
+            "adr": 462
+          },
+          "low": {
+            "revenue": 57410,
+            "occupancy": 0.46,
+            "adr": 407
+          }
+        }
+      }
+    },
+    {
+      "id": "12601409",
+      "sourceListingPath": "data/listing-12601409.json",
+      "sourceEvalPath": "data/eval-12601409.json",
+      "input": {
+        "listingId": "12601409",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "6749 N 2200 W B302, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/DlMNV/6749-N-2200-W-B302-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 749000,
+        "bedrooms": 2,
+        "bathrooms": 3,
+        "squareFootage": 1489,
+        "propertyType": "Condominium",
+        "area": "14 - Kimball",
+        "subdivision": "Crestview Condos",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "target": {
+        "projections": {
+          "high": {
+            "revenue": 66971,
+            "occupancy": 0.65,
+            "adr": 336
+          },
+          "medium": {
+            "revenue": 50593,
+            "occupancy": 0.55,
+            "adr": 300
+          },
+          "low": {
+            "revenue": 34854,
+            "occupancy": 0.43,
+            "adr": 264
+          }
+        }
+      }
+    },
+    {
+      "id": "12601467",
+      "sourceListingPath": "data/listing-12601467.json",
+      "sourceEvalPath": "data/eval-12601467.json",
+      "input": {
+        "listingId": "12601467",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "7715 Village Way, Unit #: 106, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260410224023414655000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 5000000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2024,
+        "propertyType": "Condominium",
+        "area": "06 - Empire Pass",
+        "subdivision": "Shooting Star",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.623077,
+        "longitude": -111.499854
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 220551,
+            "occupancy": 0.73,
+            "adr": 998
+          },
+          "medium": {
+            "revenue": 172131,
+            "occupancy": 0.63,
+            "adr": 891
+          },
+          "low": {
+            "revenue": 122580,
+            "occupancy": 0.51,
+            "adr": 784
+          }
+        }
+      }
+    },
+    {
+      "id": "ZPID-247980517",
+      "sourceListingPath": "data/listing-ZPID-247980517.json",
+      "sourceEvalPath": "data/eval-ZPID-247980517.json",
+      "input": {
+        "listingId": "ZPID-247980517",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "315 W 4350 N, Driggs, ID 83452",
+        "listingUrl": "https://www.zillow.com/homedetails/315-W-4350-N-Driggs-ID-83452/247980517_zpid/",
+        "city": "Driggs",
+        "state": "ID",
+        "zip": "83452",
+        "price": 1470200,
+        "bedrooms": 4,
+        "bathrooms": 2,
+        "squareFootage": 2800,
+        "propertyType": "Single Family",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 3684,
+        "latitude": 43.785427,
+        "longitude": -111.108444
+      },
+      "target": {
+        "region": "",
+        "confidence": "low",
+        "projections": {
+          "high": {
+            "revenue": 132326,
+            "occupancy": 0.63,
+            "adr": 685
+          },
+          "medium": {
+            "revenue": 101363,
+            "occupancy": 0.55,
+            "adr": 601
+          },
+          "low": {
+            "revenue": 66705,
+            "occupancy": 0.43,
+            "adr": 505
+          }
+        }
+      }
+    },
+    {
+      "id": "ZPID-439589886",
+      "sourceListingPath": "data/listing-ZPID-439589886.json",
+      "sourceEvalPath": "data/eval-ZPID-439589886.json",
+      "input": {
+        "listingId": "ZPID-439589886",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "909 W Peace Tree Trl #505, Heber City, UT 84032",
+        "listingUrl": "https://www.zillow.com/kamas-ut/",
+        "city": "Heber City",
+        "state": "UT",
+        "zip": "84032",
+        "price": 651700,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1277,
+        "propertyType": "Single Family",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 2631,
+        "latitude": 40.676857,
+        "longitude": -111.4299
+      },
+      "target": {
+        "region": "Heber/Midway",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 74250,
+            "occupancy": 0.713,
+            "adr": 340
+          },
+          "medium": {
+            "revenue": 55000,
+            "occupancy": 0.598,
+            "adr": 300
+          },
+          "low": {
+            "revenue": 41250,
+            "occupancy": 0.46,
+            "adr": 292
+          }
+        }
+      }
+    },
+    {
+      "id": "ZPID-68841058",
+      "sourceListingPath": "data/listing-ZPID-68841058.json",
+      "sourceEvalPath": "data/eval-ZPID-68841058.json",
+      "input": {
+        "listingId": "ZPID-68841058",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "1530 Empire Ave #304, Park City, UT 84060",
+        "listingUrl": "https://www.zillow.com/homedetails/1530-Empire-Ave-304-Park-City-UT-84060/68841058_zpid/",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 1095000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 783,
+        "propertyType": "Condominium",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 2775,
+        "latitude": 40.65522,
+        "longitude": -111.50741
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 118190,
+            "occupancy": 0.71,
+            "adr": 546
+          },
+          "medium": {
+            "revenue": 91298,
+            "occupancy": 0.61,
+            "adr": 488
+          },
+          "low": {
+            "revenue": 64452,
+            "occupancy": 0.49,
+            "adr": 429
+          }
+        }
+      }
+    },
+    {
+      "id": "ZPID-68849653",
+      "sourceListingPath": "data/listing-ZPID-68849653.json",
+      "sourceEvalPath": "data/eval-ZPID-68849653.json",
+      "input": {
+        "listingId": "ZPID-68849653",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "1885 Prospector Ave #B-12, Park City, UT 84060",
+        "listingUrl": "https://www.zillow.com/homedetails/1885-Prospector-Ave-B-12-Park-City-UT-84060/68849653_zpid/",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 680000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 872,
+        "propertyType": "Condominium",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 2620,
+        "latitude": 40.661865,
+        "longitude": -111.49727
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 93438,
+            "occupancy": 0.68,
+            "adr": 448
+          },
+          "medium": {
+            "revenue": 71138,
+            "occupancy": 0.58,
+            "adr": 400
+          },
+          "low": {
+            "revenue": 49629,
+            "occupancy": 0.46,
+            "adr": 352
+          }
+        }
+      }
+    },
+    {
+      "id": "ZPID-89091573",
+      "sourceListingPath": "data/listing-ZPID-89091573.json",
+      "sourceEvalPath": "data/eval-ZPID-89091573.json",
+      "input": {
+        "listingId": "ZPID-89091573",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "3269 Tatanka Trl, Park City, UT 84098",
+        "listingUrl": "https://www.zillow.com/homedetails/3269-Tatanka-Trl-Park-City-UT-84098/89091573_zpid/",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84098",
+        "price": 4999999,
+        "bedrooms": 4,
+        "bathrooms": 6,
+        "squareFootage": 5323,
+        "propertyType": "Property",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 24257,
+        "latitude": 40.747803,
+        "longitude": -111.447395
+      },
+      "target": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "projections": {
+          "high": {
+            "revenue": 217789,
+            "occupancy": 0.73,
+            "adr": 985
+          },
+          "medium": {
+            "revenue": 170000,
+            "occupancy": 0.63,
+            "adr": 880
+          },
+          "low": {
+            "revenue": 121008,
+            "occupancy": 0.51,
+            "adr": 774
+          }
+        }
+      }
+    }
+  ]
+}

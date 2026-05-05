@@ -3,6 +3,7 @@
  *
  * Usage:
  *   set -a && source .env && set +a
+ *   # Requires SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY
  *   npx tsx scripts/migrate-to-supabase.ts
  *
  * Reads from data/migration/{listings,evaluations,monthly_projections,comparables}.json

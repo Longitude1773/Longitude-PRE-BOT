@@ -22,6 +22,7 @@ export type ScrapeZillowListingCommand = {
   id: string;
   type: "scrape_zillow_listing";
   url: string;
+  requestKey?: string;
   submittedBy?: string;
   createdAt: string;
 };
@@ -30,6 +31,7 @@ export type ScrapeMlsListingCommand = {
   id: string;
   type: "scrape_mls_listing";
   url: string;
+  requestKey?: string;
   submittedBy?: string;
   createdAt: string;
 };
@@ -87,8 +89,8 @@ export async function enqueueMlsCommand(command: SubmitMls2faCommandInput | Scra
   const full: MlsCommand = command.type === "submit_2fa_code"
     ? { ...base, type: "submit_2fa_code", code: command.code }
     : command.type === "scrape_zillow_listing"
-      ? { ...base, type: "scrape_zillow_listing", url: command.url }
-      : { ...base, type: "scrape_mls_listing", url: command.url };
+      ? { ...base, type: "scrape_zillow_listing", url: command.url, requestKey: command.requestKey }
+      : { ...base, type: "scrape_mls_listing", url: command.url, requestKey: command.requestKey };
   await appendFile(commandFile, `${JSON.stringify(full)}\n`);
   return full;
 }

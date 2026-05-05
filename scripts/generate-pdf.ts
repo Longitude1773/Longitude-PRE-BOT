@@ -8,6 +8,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { dirname, extname, resolve } from "path";
+import { launchConfiguredBrowser } from "./browser-runtime.ts";
 
 const [, , dataPath, outputPath] = process.argv;
 
@@ -37,6 +38,8 @@ type EvaluationData = {
   hero?: {
     centerX?: number;
     centerY?: number;
+    focalX?: number;
+    focalY?: number;
     photoRadius?: number;
     frameInnerRadius?: number;
     frameOuterRadius?: number;
@@ -375,15 +378,17 @@ const html = `
   </html>
 `;
 
-const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
+const browser = await launchConfiguredBrowser({ headless: true, label: "generate-pdf" });
+const context = browser.contexts()[0] || await browser.newContext();
+const page = context.pages()[0] || await context.newPage();
+await page.setViewportSize({ width: 816, height: 1056 }).catch(() => {});
 await page.setContent(html, { waitUntil: "networkidle" });
 
 // Render Chart.js in the browser, then inject the result into the SVG <image> element
 const chartDataUri = await renderChartInBrowser(page, data.projections.medium.monthly || []);
 await page.evaluate((uri) => {
   const img = document.getElementById("chartjs-image");
-  if (img) img.setAttribute("href", uri);
+  if (img) img.setAttribute("href", String(uri));
 }, chartDataUri);
 await page.waitForTimeout(100);
 

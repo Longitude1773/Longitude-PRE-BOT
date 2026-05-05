@@ -14,7 +14,6 @@ const requiredEnv = [
 const recommendedEnv = [
   "SLACK_CHANNEL_ID",
   "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
 ] as const;
 
 const requiredFiles = [
@@ -27,7 +26,15 @@ const requiredFiles = [
 
 const missingEnv = requiredEnv.filter((key) => !process.env[key] || String(process.env[key]).trim() === "");
 const missingFiles = requiredFiles.filter((filePath) => !existsSync(filePath));
-const recommendedMissing = recommendedEnv.filter((key) => !process.env[key] || String(process.env[key]).trim() === "");
+const recommendedMissing: string[] = recommendedEnv.filter(
+  (key) => !process.env[key] || String(process.env[key]).trim() === "",
+);
+if (
+  !process.env.SUPABASE_SECRET_KEY?.trim() &&
+  !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+) {
+  recommendedMissing.push("SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY");
+}
 
 const resolvedProjectDir = resolve(process.env.STR_BOT_DIR || repoRoot);
 const resolvedPromptFile = process.env.SYSTEM_PROMPT_FILE ? resolve(process.env.SYSTEM_PROMPT_FILE) : "";

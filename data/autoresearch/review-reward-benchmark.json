@@ -1,0 +1,2066 @@
+{
+  "version": 2,
+  "generatedAt": "2026-04-17T00:52:29.647Z",
+  "description": "Frozen review-reward benchmark built from terminal Slack thread contexts plus final eval artifacts when available. Each case stores the reference first-pass underwrite, the accepted target decision, and review-friction metadata so candidate underwriting can be judged on correct estimate-versus-escalate behavior, evidence coverage, calibration, and projection accuracy when an estimate is warranted.",
+  "metric": {
+    "name": "mean_reward",
+    "direction": "higher",
+    "formula": "mean( decision_reward - friction_weight * (projection_loss + evidence_coverage_loss + calibration_loss) )"
+  },
+  "exclusions": [
+    {
+      "id": "12601253",
+      "threadTs": "1775072046.080169",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601255",
+      "threadTs": "1775072284.686399",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601256",
+      "threadTs": "1775072567.073279",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601259",
+      "threadTs": "1775072647.945659",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601260",
+      "threadTs": "1775072717.957629",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601263",
+      "threadTs": "1775072411.269629",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601264",
+      "threadTs": "1775071879.928129",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601265",
+      "threadTs": "1775071671.008119",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601266",
+      "threadTs": "1775071468.829039",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601267",
+      "threadTs": "1775071751.805109",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601270",
+      "threadTs": "1775071597.143499",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601277",
+      "threadTs": "1775088793.190569",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601280",
+      "threadTs": "1775078097.965899",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601281",
+      "threadTs": "1775079133.324579",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601283",
+      "threadTs": "1775083709.527649",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601283",
+      "threadTs": "1775095289.085789",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601290",
+      "threadTs": "1775146948.322139",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601291",
+      "threadTs": "1775148569.854369",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601292",
+      "threadTs": "1775150996.587639",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601355",
+      "threadTs": "1775619374.504479",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601362",
+      "threadTs": "1775619376.269469",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601380",
+      "threadTs": "1775619375.332649",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601381",
+      "threadTs": "1775619378.211409",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601389",
+      "threadTs": "1775667071.358499",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601391",
+      "threadTs": "1775673042.502639",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601392",
+      "threadTs": "1775675285.653369",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601393",
+      "threadTs": "1775679018.248379",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601408",
+      "threadTs": "1775752652.705759",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "12601409",
+      "threadTs": "1775753084.344919",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "ZPID-247980517",
+      "threadTs": "1775674518.253009",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "ZPID-68841058",
+      "threadTs": "1775751200.305519",
+      "reason": "non_terminal_thread"
+    },
+    {
+      "id": "ZPID-68849653",
+      "threadTs": "1776181356.505469",
+      "reason": "non_terminal_thread"
+    }
+  ],
+  "cases": [
+    {
+      "id": "12501851",
+      "threadTs": "1776205451.127929",
+      "sourceListingPath": "data/listing-12501851.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205451.127929.json",
+      "input": {
+        "listingId": "12501851",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "1176 N Francis Gate Circle, Francis, UT 84036",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720250502003250100492000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Francis",
+        "state": "UT",
+        "zip": "84036",
+        "price": 0,
+        "bedrooms": 4,
+        "bathrooms": 6,
+        "squareFootage": 5316,
+        "propertyType": "Single Family Residence",
+        "area": "50 - Woodland and Francis",
+        "subdivision": "Foothills At Francis",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.617085,
+        "longitude": -111.257628
+      },
+      "referenceInitial": {
+        "region": "",
+        "confidence": "very_low",
+        "methodology": "Projections generated from Zillow listing facts using price-based gross-yield heuristics as the anchor, plus bedroom-count, property-type, and STR-permission heuristics. This is not a Park City market-knowledge underwrite and should be treated as a lower-confidence on-demand estimate for a single family residence. Balanced occupancy was anchored around 55% with scenario spreads applied above and below that baseline.",
+        "decision": "escalate",
+        "decisionReason": "unsupported_market_low_evidence",
+        "projections": {
+          "high": {
+            "revenue": 0,
+            "occupancy": 0.63,
+            "adr": 0
+          },
+          "medium": {
+            "revenue": 0,
+            "occupancy": 0.55,
+            "adr": 0
+          },
+          "low": {
+            "revenue": 0,
+            "occupancy": 0.43,
+            "adr": 0
+          }
+        },
+        "comparableCount": 0,
+        "grounding": {
+          "summary": "MLS source listing; listing acquisition tool via flexmls_scrape",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS source listing",
+              "url": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720250502003250100492000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+              "note": "1176 N Francis Gate Circle, Francis, UT 84036"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "",
+        "confidence": "very_low",
+        "methodology": "Manual thread adjustment applied from operator guidance: keep the existing occupancy curves, anchor the Balanced case at about $130,000 annual revenue, and rescale Optimized and Conservative from that same ADR baseline. This remains a lower-confidence off-market estimate rather than a Park City comp-backed underwrite.",
+        "decision": "escalate",
+        "decisionReason": "unsupported_market_low_evidence",
+        "projections": {
+          "high": {
+            "revenue": 149109,
+            "occupancy": 0.63,
+            "adr": 740
+          },
+          "medium": {
+            "revenue": 130000,
+            "occupancy": 0.55,
+            "adr": 740
+          },
+          "low": {
+            "revenue": 101885,
+            "occupancy": 0.43,
+            "adr": 740
+          }
+        },
+        "comparableCount": 0,
+        "evidenceRequirements": {
+          "minComparableCount": 0,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": true
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 3,
+        "adjustmentCount": 1,
+        "clarifyCount": 0,
+        "questionCount": 1,
+        "manualAdjustmentCount": 1
+      }
+    },
+    {
+      "id": "12600268",
+      "threadTs": "1776205507.110449",
+      "sourceListingPath": "data/listing-12600268.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205507.110449.json",
+      "input": {
+        "listingId": "12600268",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "300 Deer Valley Drive, Unit #:, Residence A Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720251230204854539025000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Residence A Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 6995000,
+        "bedrooms": 4,
+        "bathrooms": 5,
+        "squareFootage": 4881,
+        "propertyType": "Condominium",
+        "area": "01 - Old Town",
+        "subdivision": "Roundabout",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_text",
+        "strApproved": true,
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.645279,
+        "longitude": -111.493815
+      },
+      "referenceInitial": {
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 337638,
+            "occupancy": 0.79,
+            "adr": 1448
+          },
+          "medium": {
+            "revenue": 273070,
+            "occupancy": 0.69,
+            "adr": 1293
+          },
+          "low": {
+            "revenue": 198919,
+            "occupancy": 0.57,
+            "adr": 1138
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS source listing; listing acquisition tool via flexmls_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS source listing",
+              "url": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720251230204854539025000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+              "note": "300 Deer Valley Drive, Unit #:, Residence A Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Lower Deer Valley"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 304135,
+            "occupancy": 0.711,
+            "adr": 1450
+          },
+          "medium": {
+            "revenue": 228374,
+            "occupancy": 0.621,
+            "adr": 1200
+          },
+          "low": {
+            "revenue": 173244,
+            "occupancy": 0.513,
+            "adr": 1100
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 5,
+        "extraVersions": 4,
+        "threadReplyTurns": 5,
+        "adjustmentCount": 4,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601254",
+      "threadTs": "1775063090.55578",
+      "sourceListingPath": "data/listing-12601254.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775063090.55578.json",
+      "input": {
+        "listingId": "12601254",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "2780 Gallivan Loop 32, Park City, UT 84060",
+        "listingUrl": "",
+        "city": "Park City",
+        "price": 2895000,
+        "bedrooms": 5,
+        "bathrooms": 6,
+        "squareFootage": 3976,
+        "propertyType": "Condominium / Townhouse",
+        "area": "09 - Park Meadows",
+        "subdivision": "Cove At Eagle Mountain"
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 230492,
+            "occupancy": 0.71,
+            "adr": 1065
+          },
+          "medium": {
+            "revenue": 177861,
+            "occupancy": 0.61,
+            "adr": 951
+          },
+          "low": {
+            "revenue": 125760,
+            "occupancy": 0.49,
+            "adr": 837
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 230492,
+            "occupancy": 0.71,
+            "adr": 1065
+          },
+          "medium": {
+            "revenue": 177861,
+            "occupancy": 0.61,
+            "adr": 951
+          },
+          "low": {
+            "revenue": 125760,
+            "occupancy": 0.49,
+            "adr": 837
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": false,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 1,
+        "extraVersions": 0,
+        "threadReplyTurns": 0,
+        "adjustmentCount": 0,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601266",
+      "threadTs": "1776205426.387489",
+      "sourceListingPath": "data/listing-12601266.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205426.387489.json",
+      "input": {
+        "listingId": "12601266",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "Residential Park City Detail-Private 1825 Three Kings Drive, Unit #: 804, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260315165539795924000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 0,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 1928,
+        "propertyType": "Condominium",
+        "area": "01 - Old Town",
+        "subdivision": "Silver Star - Spiro Condominiums",
+        "nightlyRentalAllowed": "Property Description",
+        "nightlyRentalAllowedSource": "mls_detail_field",
+        "strApproved": false,
+        "openHouses": [],
+        "rentZestimate": 0
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 123239,
+            "occupancy": 0.68,
+            "adr": 591
+          },
+          "medium": {
+            "revenue": 93909,
+            "occupancy": 0.58,
+            "adr": 528
+          },
+          "low": {
+            "revenue": 65608,
+            "occupancy": 0.46,
+            "adr": 465
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS source listing; listing acquisition tool via flexmls_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS source listing",
+              "url": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260315165539795924000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+              "note": "Residential Park City Detail-Private 1825 Three Kings Drive, Unit #: 804, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 123239,
+            "occupancy": 0.68,
+            "adr": 591
+          },
+          "medium": {
+            "revenue": 93909,
+            "occupancy": 0.58,
+            "adr": 528
+          },
+          "low": {
+            "revenue": 65608,
+            "occupancy": 0.46,
+            "adr": 465
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 1,
+        "adjustmentCount": 0,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601277",
+      "threadTs": "1775088793.19056",
+      "sourceListingPath": "data/listing-12601277.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775088793.19056.json",
+      "input": {
+        "listingId": "12601277",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "10256 N Basin Canyon Road, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dipl7/10256-N-Basin-Canyon-Road-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 2375000,
+        "bedrooms": 3,
+        "bathrooms": 3,
+        "squareFootage": 2924,
+        "propertyType": "Single Family",
+        "area": "18 - Glenwild",
+        "subdivision": "Stagecoach Estates"
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://www.flexmls.com/share/Dipl7/10256-N-Basin-Canyon-Road-Park-City-UT-84098",
+              "note": "10256 N Basin Canyon Road, Park City, UT 84098"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 1,
+        "extraVersions": 0,
+        "threadReplyTurns": 0,
+        "adjustmentCount": 0,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601288",
+      "threadTs": "1775144132.422479",
+      "sourceListingPath": "data/listing-12601288.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775144132.422479.json",
+      "input": {
+        "listingId": "12601288",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "720 Deer Valley Drive Unit 2, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DixSv/720-Deer-Valley-Drive-Unit-2-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 1500000,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1137,
+        "propertyType": "Condominium / Townhouse",
+        "area": "01 - Old Town",
+        "subdivision": "Foxglove Cottages"
+      },
+      "referenceInitial": {
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 157473,
+            "occupancy": 0.77,
+            "adr": 686
+          },
+          "medium": {
+            "revenue": 125939,
+            "occupancy": 0.67,
+            "adr": 613
+          },
+          "low": {
+            "revenue": 90893,
+            "occupancy": 0.55,
+            "adr": 539
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://www.flexmls.com/share/DixSv/720-Deer-Valley-Drive-Unit-2-Park-City-UT-84060",
+              "note": "720 Deer Valley Drive Unit 2, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Lower Deer Valley"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 101970,
+            "occupancy": 0.77,
+            "adr": 444
+          },
+          "medium": {
+            "revenue": 81550,
+            "occupancy": 0.67,
+            "adr": 396
+          },
+          "low": {
+            "revenue": 58858,
+            "occupancy": 0.55,
+            "adr": 348
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 5,
+        "extraVersions": 4,
+        "threadReplyTurns": 6,
+        "adjustmentCount": 4,
+        "clarifyCount": 0,
+        "questionCount": 1,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601360",
+      "threadTs": "1775619377.268499",
+      "sourceListingPath": "data/listing-12601360.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775619377.268499.json",
+      "input": {
+        "listingId": "12601360",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "3238 Big Spruce Way, Park City, UT 84098",
+        "listingUrl": "https://www.flexmls.com/share/Dkm2g/3238-Big-Spruce-Way-Park-City-UT-84098",
+        "city": "Park City",
+        "price": 2685000,
+        "bedrooms": 5,
+        "bathrooms": 5,
+        "squareFootage": 6401,
+        "propertyType": "Single Family",
+        "area": "15 - Pinebrook",
+        "subdivision": "Ecker Hill",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": [
+          {
+            "date": "Wednesday, April 8 2026",
+            "time": "12:00 PM to 3:00 PM",
+            "hostedBy": ""
+          }
+        ]
+      },
+      "referenceInitial": {
+        "region": "Pinebrook/Jeremy Ranch",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Pinebrook/Jeremy Ranch ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 182217,
+            "occupancy": 0.68,
+            "adr": 874
+          },
+          "medium": {
+            "revenue": 138705,
+            "occupancy": 0.58,
+            "adr": 780
+          },
+          "low": {
+            "revenue": 96766,
+            "occupancy": 0.46,
+            "adr": 686
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://www.flexmls.com/share/Dkm2g/3238-Big-Spruce-Way-Park-City-UT-84098",
+              "note": "3238 Big Spruce Way, Park City, UT 84098"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Pinebrook/Jeremy Ranch"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Pinebrook/Jeremy Ranch",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Pinebrook/Jeremy Ranch ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 182217,
+            "occupancy": 0.68,
+            "adr": 874
+          },
+          "medium": {
+            "revenue": 133370,
+            "occupancy": 0.58,
+            "adr": 750
+          },
+          "low": {
+            "revenue": 96766,
+            "occupancy": 0.46,
+            "adr": 686
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 2,
+        "adjustmentCount": 1,
+        "clarifyCount": 0,
+        "questionCount": 1,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601380",
+      "threadTs": "1776205523.897489",
+      "sourceListingPath": "data/listing-12601380.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205523.897489.json",
+      "input": {
+        "listingId": "12601380",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "2787 Gallivan Loop, Park City, UT 84060",
+        "listingUrl": "https://my.flexmls.com/CameronBrockbank/search/shared_links/Dkm2c/listings/20260324195630069203000000",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 3100000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2801,
+        "propertyType": "Condominium",
+        "area": "09 - Park Meadows",
+        "subdivision": "Cove At Eagle Mountain",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_field",
+        "strApproved": true,
+        "openHouses": [
+          {
+            "date": "Wednesday, April 15, 2026",
+            "time": "12:00pm - 3:00pm",
+            "hostedBy": "Page Juliano"
+          }
+        ],
+        "rentZestimate": 0,
+        "latitude": 40.684459,
+        "longitude": -111.499573
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 156034,
+            "occupancy": 0.71,
+            "adr": 721
+          },
+          "medium": {
+            "revenue": 120446,
+            "occupancy": 0.61,
+            "adr": 644
+          },
+          "low": {
+            "revenue": 85052,
+            "occupancy": 0.49,
+            "adr": 566
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS source listing; listing acquisition tool via flexmls_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS source listing",
+              "url": "https://my.flexmls.com/CameronBrockbank/search/shared_links/Dkm2c/listings/20260324195630069203000000",
+              "note": "2787 Gallivan Loop, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 99833,
+            "occupancy": 0.568,
+            "adr": 577
+          },
+          "medium": {
+            "revenue": 76982,
+            "occupancy": 0.488,
+            "adr": 515
+          },
+          "low": {
+            "revenue": 54541,
+            "occupancy": 0.392,
+            "adr": 453
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 3,
+        "adjustmentCount": 1,
+        "clarifyCount": 1,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601387",
+      "threadTs": "1775663517.306429",
+      "sourceListingPath": "data/listing-12601387.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775663517.306429.json",
+      "input": {
+        "listingId": "12601387",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "1940 Prospector Avenue 113, Park City, UT 84060",
+        "listingUrl": "https://www.flexmls.com/share/DktOE/1940-Prospector-Avenue-113-Park-City-UT-84060",
+        "city": "Park City",
+        "price": 385000,
+        "bedrooms": 1,
+        "bathrooms": 1,
+        "squareFootage": 510,
+        "propertyType": "Condominium",
+        "area": "08 - Prospector",
+        "subdivision": "Carriage House",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 65474,
+            "occupancy": 0.68,
+            "adr": 314
+          },
+          "medium": {
+            "revenue": 49783,
+            "occupancy": 0.58,
+            "adr": 280
+          },
+          "low": {
+            "revenue": 34723,
+            "occupancy": 0.46,
+            "adr": 246
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://www.flexmls.com/share/DktOE/1940-Prospector-Avenue-113-Park-City-UT-84060",
+              "note": "1940 Prospector Avenue 113, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 32880,
+            "occupancy": 0.68,
+            "adr": 158
+          },
+          "medium": {
+            "revenue": 25000,
+            "occupancy": 0.58,
+            "adr": 141
+          },
+          "low": {
+            "revenue": 17437,
+            "occupancy": 0.46,
+            "adr": 124
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 3,
+        "adjustmentCount": 1,
+        "clarifyCount": 0,
+        "questionCount": 1,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601393",
+      "threadTs": "1776205492.093719",
+      "sourceListingPath": "data/listing-12601393.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205492.093719.json",
+      "input": {
+        "listingId": "12601393",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS",
+        "skipMarketGate": true,
+        "address": "7447 Royal Street, Unit #: 252, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260406174915305158000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 1950000,
+        "bedrooms": 2,
+        "bathrooms": 3,
+        "squareFootage": 1502,
+        "propertyType": "Condominium",
+        "area": "05 - Upper Deer Valley Resort",
+        "subdivision": "Black Bear Lodge",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "mls_detail_text",
+        "strApproved": true,
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.623583,
+        "longitude": -111.489742
+      },
+      "referenceInitial": {
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 157473,
+            "occupancy": 0.77,
+            "adr": 686
+          },
+          "medium": {
+            "revenue": 125939,
+            "occupancy": 0.67,
+            "adr": 613
+          },
+          "low": {
+            "revenue": 90893,
+            "occupancy": 0.55,
+            "adr": 539
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS source listing; listing acquisition tool via flexmls_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS source listing",
+              "url": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260406174915305158000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+              "note": "7447 Royal Street, Unit #: 252, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Lower Deer Valley"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Lower Deer Valley",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Lower Deer Valley ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 113724,
+            "occupancy": 0.77,
+            "adr": 495
+          },
+          "medium": {
+            "revenue": 90979,
+            "occupancy": 0.55,
+            "adr": 540
+          },
+          "low": {
+            "revenue": 68234,
+            "occupancy": 0.55,
+            "adr": 404
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 7,
+        "extraVersions": 6,
+        "threadReplyTurns": 9,
+        "adjustmentCount": 5,
+        "clarifyCount": 1,
+        "questionCount": 1,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601407",
+      "threadTs": "1775749734.695619",
+      "sourceListingPath": "data/listing-12601407.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775749734.695619.json",
+      "input": {
+        "listingId": "12601407",
+        "listingSource": "",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "389 W Ascent Drive, Hideout, UT 84036",
+        "listingUrl": "https://www.flexmls.com/share/DlKUi/389-W-Ascent-Drive-Hideout-UT-84036",
+        "city": "Hideout",
+        "price": 1225000,
+        "bedrooms": 4,
+        "bathrooms": 4,
+        "squareFootage": 3077,
+        "propertyType": "Condominium / Townhouse",
+        "area": "29 - Hideout",
+        "subdivision": "Deer Springs",
+        "nightlyRentalAllowed": "Yes",
+        "nightlyRentalAllowedSource": "permalink_initial",
+        "strApproved": true,
+        "openHouses": []
+      },
+      "referenceInitial": {
+        "region": "Jordanelle",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Jordanelle ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 166847,
+            "occupancy": 0.71,
+            "adr": 771
+          },
+          "medium": {
+            "revenue": 128890,
+            "occupancy": 0.61,
+            "adr": 689
+          },
+          "low": {
+            "revenue": 91063,
+            "occupancy": 0.49,
+            "adr": 606
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via listing_ingest; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://www.flexmls.com/share/DlKUi/389-W-Ascent-Drive-Hideout-UT-84036",
+              "note": "389 W Ascent Drive, Hideout, UT 84036"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "listing_ingest",
+              "note": "listing_input"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Jordanelle"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Jordanelle",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Jordanelle ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 150162,
+            "occupancy": 0.71,
+            "adr": 694
+          },
+          "medium": {
+            "revenue": 116001,
+            "occupancy": 0.61,
+            "adr": 620
+          },
+          "low": {
+            "revenue": 81957,
+            "occupancy": 0.49,
+            "adr": 545
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 5,
+        "adjustmentCount": 1,
+        "clarifyCount": 2,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "12601467",
+      "threadTs": "1776205475.465549",
+      "sourceListingPath": "data/listing-12601467.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776205475.465549.json",
+      "input": {
+        "listingId": "12601467",
+        "listingSource": "mls_on_demand",
+        "identifierLabel": "MLS#",
+        "skipMarketGate": true,
+        "address": "7715 Village Way, Unit #: 106, Park City, UT 84060",
+        "listingUrl": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260410224023414655000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84060",
+        "price": 5000000,
+        "bedrooms": 3,
+        "bathrooms": 4,
+        "squareFootage": 2024,
+        "propertyType": "Condominium",
+        "area": "06 - Empire Pass",
+        "subdivision": "Shooting Star",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 0,
+        "latitude": 40.623077,
+        "longitude": -111.499854
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 220551,
+            "occupancy": 0.73,
+            "adr": 998
+          },
+          "medium": {
+            "revenue": 172131,
+            "occupancy": 0.63,
+            "adr": 891
+          },
+          "low": {
+            "revenue": 122580,
+            "occupancy": 0.51,
+            "adr": 784
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "MLS# source listing; listing acquisition tool via flexmls_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "MLS# source listing",
+              "url": "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+reports/flexreport/generate.html&c1=x%2720260410224023414655000000%27&report2=20220503182940327403000000&report_type=private&tech_id=x%2720260309205619460268000000%27&ma_tech_id=x%2720190109112430415765000000%27",
+              "note": "7715 Village Way, Unit #: 106, Park City, UT 84060"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "flexmls_scrape",
+              "note": "mls_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 220551,
+            "occupancy": 0.73,
+            "adr": 998
+          },
+          "medium": {
+            "revenue": 172131,
+            "occupancy": 0.63,
+            "adr": 891
+          },
+          "low": {
+            "revenue": 122580,
+            "occupancy": 0.51,
+            "adr": 784
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 1,
+        "extraVersions": 0,
+        "threadReplyTurns": 1,
+        "adjustmentCount": 0,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "ZPID-122537467",
+      "threadTs": "1776184284.350969",
+      "sourceListingPath": "data/listing-ZPID-122537467.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776184284.350969.json",
+      "input": {
+        "listingId": "ZPID-122537467",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "5618 E South Fork Rd, Provo Canyon, UT 84604",
+        "listingUrl": "https://www.zillow.com/homedetails/5618-E-South-Fork-Rd-Provo-Canyon-UT-84604/122537467_zpid/",
+        "city": "Provo Canyon",
+        "state": "UT",
+        "zip": "84604",
+        "price": 43000000,
+        "bedrooms": 6,
+        "bathrooms": 10,
+        "squareFootage": 22958,
+        "propertyType": "Single Family",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 95182,
+        "latitude": 40.335808,
+        "longitude": -111.529396
+      },
+      "referenceInitial": {
+        "region": "",
+        "confidence": "low",
+        "methodology": "Projections generated from Zillow listing facts using Rent Zestimate ($95,182/mo) as the anchor, plus bedroom-count, property-type, and STR-permission heuristics. This is not a Park City market-knowledge underwrite and should be treated as a lower-confidence on-demand estimate for a single family. Balanced occupancy was anchored around 55% with scenario spreads applied above and below that baseline.",
+        "decision": "escalate",
+        "decisionReason": "unsupported_market_low_evidence",
+        "projections": {
+          "high": {
+            "revenue": 3880944,
+            "occupancy": 0.63,
+            "adr": 20090
+          },
+          "medium": {
+            "revenue": 2972028,
+            "occupancy": 0.55,
+            "adr": 17623
+          },
+          "low": {
+            "revenue": 1954417,
+            "occupancy": 0.43,
+            "adr": 14803
+          }
+        },
+        "comparableCount": 0,
+        "grounding": {
+          "summary": "ZPID source listing; listing acquisition tool via zillow_scrape",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "ZPID source listing",
+              "url": "https://www.zillow.com/homedetails/5618-E-South-Fork-Rd-Provo-Canyon-UT-84604/122537467_zpid/",
+              "note": "5618 E South Fork Rd, Provo Canyon, UT 84604"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "zillow_scrape",
+              "note": "zillow_on_demand"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "",
+        "confidence": "low",
+        "methodology": "Projections generated from Zillow listing facts using Rent Zestimate ($95,182/mo) as the anchor, plus bedroom-count, property-type, and STR-permission heuristics. This is not a Park City market-knowledge underwrite and should be treated as a lower-confidence on-demand estimate for a single family. Balanced occupancy was anchored around 55% with scenario spreads applied above and below that baseline.",
+        "decision": "escalate",
+        "decisionReason": "unsupported_market_low_evidence",
+        "projections": {
+          "high": {
+            "revenue": 3880944,
+            "occupancy": 0.63,
+            "adr": 20090
+          },
+          "medium": {
+            "revenue": 2972028,
+            "occupancy": 0.55,
+            "adr": 17623
+          },
+          "low": {
+            "revenue": 1954417,
+            "occupancy": 0.43,
+            "adr": 14803
+          }
+        },
+        "comparableCount": 0,
+        "evidenceRequirements": {
+          "minComparableCount": 0,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": true
+        }
+      },
+      "episode": {
+        "finalVersion": 1,
+        "extraVersions": 0,
+        "threadReplyTurns": 1,
+        "adjustmentCount": 0,
+        "clarifyCount": 0,
+        "questionCount": 0,
+        "manualAdjustmentCount": 0
+      }
+    },
+    {
+      "id": "ZPID-439589886",
+      "threadTs": "1776287356.437859",
+      "sourceListingPath": "data/listing-ZPID-439589886.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1776287356.437859.json",
+      "input": {
+        "listingId": "ZPID-439589886",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "909 W Peace Tree Trl #505, Heber City, UT 84032",
+        "listingUrl": "https://www.zillow.com/kamas-ut/",
+        "city": "Heber City",
+        "state": "UT",
+        "zip": "84032",
+        "price": 651700,
+        "bedrooms": 2,
+        "bathrooms": 2,
+        "squareFootage": 1277,
+        "propertyType": "Single Family",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 2631,
+        "latitude": 40.676857,
+        "longitude": -111.4299
+      },
+      "referenceInitial": {
+        "region": "Heber/Midway",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Heber/Midway ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 58544,
+            "occupancy": 0.62,
+            "adr": 308
+          },
+          "medium": {
+            "revenue": 43891,
+            "occupancy": 0.52,
+            "adr": 275
+          },
+          "low": {
+            "revenue": 29786,
+            "occupancy": 0.4,
+            "adr": 242
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "ZPID source listing; listing acquisition tool via zillow_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "ZPID source listing",
+              "url": "https://www.zillow.com/kamas-ut/",
+              "note": "909 W Peace Tree Trl #505, Heber City, UT 84032"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "zillow_scrape",
+              "note": "zillow_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Heber/Midway"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Heber/Midway",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Heber/Midway ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A standard-tier pricing assumption was used. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty. Reset to the version-3 occupancy baseline, then rescaled ADR to target $55,000 balanced revenue with optimized set 35% higher and conservative set 25% lower.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 74250,
+            "occupancy": 0.713,
+            "adr": 340
+          },
+          "medium": {
+            "revenue": 55000,
+            "occupancy": 0.598,
+            "adr": 300
+          },
+          "low": {
+            "revenue": 41250,
+            "occupancy": 0.46,
+            "adr": 292
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 5,
+        "extraVersions": 4,
+        "threadReplyTurns": 7,
+        "adjustmentCount": 4,
+        "clarifyCount": 1,
+        "questionCount": 1,
+        "manualAdjustmentCount": 3
+      }
+    },
+    {
+      "id": "ZPID-89091573",
+      "threadTs": "1775682661.306909",
+      "sourceListingPath": "data/listing-ZPID-89091573.json",
+      "sourceThreadContextPath": "data/inbox/thread-context/1775682661.306909.json",
+      "input": {
+        "listingId": "ZPID-89091573",
+        "listingSource": "zillow_on_demand",
+        "identifierLabel": "ZPID",
+        "skipMarketGate": true,
+        "address": "3269 Tatanka Trl, Park City, UT 84098",
+        "listingUrl": "https://www.zillow.com/homedetails/3269-Tatanka-Trl-Park-City-UT-84098/89091573_zpid/",
+        "city": "Park City",
+        "state": "UT",
+        "zip": "84098",
+        "price": 4999999,
+        "bedrooms": 4,
+        "bathrooms": 6,
+        "squareFootage": 5323,
+        "propertyType": "Property",
+        "nightlyRentalAllowed": "",
+        "nightlyRentalAllowedSource": "",
+        "openHouses": [],
+        "rentZestimate": 24257,
+        "latitude": 40.747803,
+        "longitude": -111.447395
+      },
+      "referenceInitial": {
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 270737,
+            "occupancy": 0.73,
+            "adr": 1225
+          },
+          "medium": {
+            "revenue": 211330,
+            "occupancy": 0.63,
+            "adr": 1094
+          },
+          "low": {
+            "revenue": 150427,
+            "occupancy": 0.51,
+            "adr": 962
+          }
+        },
+        "comparableCount": 3,
+        "grounding": {
+          "summary": "ZPID source listing; listing acquisition tool via zillow_scrape; Park City market knowledge baseline; underwrite comparable synthesis via heuristic_comparable_builder",
+          "sources": [
+            {
+              "kind": "listing",
+              "label": "ZPID source listing",
+              "url": "https://www.zillow.com/homedetails/3269-Tatanka-Trl-Park-City-UT-84098/89091573_zpid/",
+              "note": "3269 Tatanka Trl, Park City, UT 84098"
+            },
+            {
+              "kind": "tool",
+              "label": "listing acquisition tool",
+              "tool": "zillow_scrape",
+              "note": "zillow_on_demand"
+            },
+            {
+              "kind": "market_knowledge",
+              "label": "Park City market knowledge baseline",
+              "note": "Park City Core (Old Town/Main St)"
+            },
+            {
+              "kind": "tool",
+              "label": "underwrite comparable synthesis",
+              "tool": "heuristic_comparable_builder",
+              "note": "3 comparable benchmarks"
+            }
+          ]
+        }
+      },
+      "approvedTarget": {
+        "status": "approved",
+        "region": "Park City Core (Old Town/Main St)",
+        "confidence": "medium",
+        "methodology": "Projections generated from data/market-knowledge.md using the Park City Core (Old Town/Main St) ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. A premium-tier pricing assumption was used based on price point and positioning. High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.",
+        "decision": "estimate",
+        "decisionReason": "supported_market_estimate",
+        "projections": {
+          "high": {
+            "revenue": 217789,
+            "occupancy": 0.73,
+            "adr": 985
+          },
+          "medium": {
+            "revenue": 170000,
+            "occupancy": 0.63,
+            "adr": 880
+          },
+          "low": {
+            "revenue": 121008,
+            "occupancy": 0.51,
+            "adr": 774
+          }
+        },
+        "comparableCount": 3,
+        "evidenceRequirements": {
+          "minComparableCount": 3,
+          "minSourceCount": 3,
+          "requiredKinds": [
+            "listing",
+            "tool",
+            "market_knowledge"
+          ],
+          "requireGroundingSummary": true,
+          "requireListingUrl": true,
+          "preferWebSearch": false
+        }
+      },
+      "episode": {
+        "finalVersion": 2,
+        "extraVersions": 1,
+        "threadReplyTurns": 2,
+        "adjustmentCount": 1,
+        "clarifyCount": 0,
+        "questionCount": 1,
+        "manualAdjustmentCount": 0
+      }
+    }
+  ]
+}

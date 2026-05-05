@@ -104,8 +104,9 @@ scripts/generate-pdf.ts
 scripts/slack.ts
   review post / replies / upload final PDF
 
-scripts/apps-script.js
-  Google Apps Script web endpoint behind the sheet client
+scripts/workflows/on-demand-request-store.ts
+  Supabase-backed single-flight registry for on-demand Zillow/FlexMLS requests
+  owns request_key uniqueness, lease ownership, and request lifecycle states
 ```
 
 ## Data Model
@@ -131,6 +132,14 @@ scripts/apps-script.js
   One row per comp used for that version.
 - `Adjustments`
   Human feedback and revision rationale.
+
+### Operational control tables
+
+- `on_demand_requests`
+  Canonical registry for explicit listing eval requests.
+  Each row is keyed by normalized `request_key`, so equivalent Zillow/FlexMLS URLs collapse to the same work item even across multiple workflow runners.
+  Lease fields (`lease_owner`, `lease_expires_at`) provide cross-process single-flight ownership.
+  Status is explicit: `queued`, `scraping`, `evaluating`, `posted`, `failed`.
 
 ## Review Loop
 
@@ -183,3 +192,16 @@ The clean mental model is:
    Render and upload PDF.
 5. `Learn`
    Treat approvals and revisions as preference signals for future calibration.
+
+For on-demand evals, there is one more important boundary:
+
+1. `Normalize`
+   Reduce the incoming Zillow/FlexMLS URL to a stable `request_key`.
+2. `Claim`
+   Acquire the unique request row in Supabase.
+3. `Scrape`
+   Hand the request to the persistent watcher browser.
+4. `Evaluate`
+   Write listing/eval artifacts and structured rows.
+5. `Post`
+   Anchor the canonical Slack review thread and mark the request `posted`.

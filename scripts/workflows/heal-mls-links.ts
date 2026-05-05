@@ -29,7 +29,7 @@ type HealResult = {
   candidates?: string[];
   updatedListingJson?: boolean;
   updatedEvalJson?: boolean;
-  updatedSheetRows?: number[];
+  updatedSheetRows?: boolean;
 };
 
 const queuePath = resolve(repoRoot, "data/inbox/mls-link-healing-queue.json");
@@ -180,7 +180,7 @@ async function healItem(item: LinkHealingCandidate, dryRun: boolean): Promise<He
       resolvedSource: extraction.source,
       mhtmlPath: item.mhtmlPath,
       candidates: extraction.candidates,
-      updatedSheetRows: [],
+      updatedSheetRows: false,
     };
   }
 

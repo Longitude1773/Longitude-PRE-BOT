@@ -481,7 +481,7 @@ export async function appendAdjustmentRow(row: Record<string, unknown>) {
 
 export type AdjustmentScenarioKey = "high" | "medium" | "low";
 export type AdjustmentField = "adr" | "occupancy" | "revenue" | "numbers";
-export type AdjustmentMode = "scale" | "set";
+export type AdjustmentMode = "scale" | "set" | "relative";
 
 export type AdjustmentConstraint = {
   scenarios: AdjustmentScenarioKey[];
@@ -496,6 +496,7 @@ export type AdjustmentSpec = {
   mode: AdjustmentMode;
   value: number;
   constraints: AdjustmentConstraint[];
+  anchorScenario?: AdjustmentScenarioKey;
   propagateScaleTo?: AdjustmentScenarioKey[];
   category: string;
   summary: string;
@@ -511,6 +512,10 @@ const scenarioAliases: Array<{ key: AdjustmentScenarioKey; label: string; patter
   { key: "medium", label: "Balanced", patterns: [/\bbalanced\b/i, /\bmedium\b/i] },
   { key: "low", label: "Conservative", patterns: [/\bconservative\b/i, /\blow\b/i] },
 ];
+
+const adjustmentVerbPattern = /\b(?:adjust|bring|drop|lower|reduce|decrease|increase|raise|bump|set|put|make)\b/i;
+const scenarioClauseSplitPattern = /\b(?:but|except|while keeping|while leaving|and keep|and leave|but keep|but leave)\b|\band\b(?=\s+(?:adjust|bring|drop|lower|reduce|decrease|increase|raise|bump|set|put|make)\b)|[.;]\s*/i;
+const affirmativeClausePattern = /\b(?:looks?\s+(?:good|fine|right|okay|ok|solid)|(?:is|are)\s+(?:good|fine|right|okay|ok|solid)|(?:leave|keep)\b[\s\S]*?\b(?:alone|as is|where (?:it|they) (?:is|are)|the same))\b/i;
 
 function scenarioLabel(key: AdjustmentScenarioKey) {
   return scenarioAliases.find((candidate) => candidate.key === key)?.label || key;
@@ -535,8 +540,35 @@ function scenarioKeysFromText(text: string) {
   return Array.from(new Set(keys));
 }
 
-function inferTargetScenarios(text: string, field: AdjustmentField) {
+function splitScenarioClauses(text: string) {
+  return text
+    .split(scenarioClauseSplitPattern)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function affirmedScenariosFromText(text: string) {
+  const clauses = splitScenarioClauses(text).filter((clause) => affirmativeClausePattern.test(clause));
+  return Array.from(new Set(clauses.flatMap((clause) => scenarioKeysFromText(clause))));
+}
+
+function inferTargetScenarios(text: string, field: AdjustmentField): AdjustmentScenarioKey[] {
+  const clauses = splitScenarioClauses(text);
+  const targetedFromClauses = Array.from(new Set(
+    clauses
+      .filter((clause) =>
+        !affirmativeClausePattern.test(clause) &&
+        !/^\s*(?:leave|keep)\b/i.test(clause) &&
+        (parseAbsoluteMetricRequest(clause) !== null || parseSignedFactor(clause) !== null || adjustmentVerbPattern.test(clause))
+      )
+      .flatMap((clause) => scenarioKeysFromText(clause)),
+  ));
+  if (targetedFromClauses.length > 0) return targetedFromClauses;
+
   const explicit = scenarioKeysFromText(text);
+  const affirmed = affirmedScenariosFromText(text);
+  const filtered = explicit.filter((scenario) => !affirmed.includes(scenario));
+  if (filtered.length > 0) return filtered;
   if (explicit.length > 0) return explicit;
   if (field === "numbers") return ["high", "medium", "low"] as AdjustmentScenarioKey[];
   return [];
@@ -560,7 +592,7 @@ function parseSignedFactor(text: string) {
   const percentMatch = lower.match(/(\d+(?:\.\d+)?)\s?%/);
   if (percentMatch) {
     const value = Number(percentMatch[1]) / 100;
-    if (lower.includes("down") || lower.includes("decrease") || lower.includes("lower") || lower.includes("reduce")) {
+    if (lower.includes("down") || lower.includes("decrease") || lower.includes("drop") || lower.includes("lower") || lower.includes("reduce")) {
       return 1 - value;
     }
     if (lower.includes("up") || lower.includes("increase") || lower.includes("raise") || lower.includes("bump")) {
@@ -573,7 +605,7 @@ function parseSignedFactor(text: string) {
   if (lower.includes("far too low")) return 1.15;
   if (lower.includes("too low") || lower.includes("bump numbers up") || lower.includes("bump up")) return 1.1;
 
-  if ((lower.includes("down") || lower.includes("decrease") || lower.includes("lower") || lower.includes("reduce")) && !lower.match(/\d+(?:\.\d+)?\s?%/)) {
+  if ((lower.includes("down") || lower.includes("decrease") || lower.includes("drop") || lower.includes("lower") || lower.includes("reduce")) && !lower.match(/\d+(?:\.\d+)?\s?%/)) {
     return 0.9;
   }
 
@@ -584,19 +616,32 @@ function parseSignedFactor(text: string) {
   return null;
 }
 
-function parseAbsoluteMetricRequest(text: string) {
+function parseMagnitudeNumber(rawValue: string, rawSuffix = "") {
+  const numeric = Number(String(rawValue || "").replace(/,/g, ""));
+  if (!Number.isFinite(numeric)) return null;
+  if (/^k$/i.test(rawSuffix)) return numeric * 1_000;
+  if (/^m$/i.test(rawSuffix)) return numeric * 1_000_000;
+  return numeric;
+}
+
+function parseAbsoluteMetricRequest(text: string): {
+  field: Exclude<AdjustmentField, "numbers">;
+  value: number;
+  scenarios: AdjustmentScenarioKey[];
+} | null {
   const clause = primaryAdjustmentClause(text);
-  const metricFirstMatch = clause.match(/\b(?:set|put|make)\b[\s\S]*?\b(revenue|adr|occupancy|occ)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*(%)?/i);
-  const scenarioFieldMatch = clause.match(/\b(?:set|put|make)\b[\s\S]*?\b(optimized|balanced|conservative|high|medium|low)\b[\s\S]*?\b(revenue|adr|occupancy|occ)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*(%)?/i);
+  const metricFirstMatch = clause.match(/\b(?:set|put|make|bring|drop|lower|reduce|decrease|increase|raise|bump)\b[\s\S]*?\b(revenue|adr|occupancy|occ)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*([km])?\s*(%)?/i);
+  const scenarioFieldMatch = clause.match(/\b(?:set|put|make|bring|drop|lower|reduce|decrease|increase|raise|bump)\b[\s\S]*?\b(optimized|balanced|conservative|high|medium|low)\b[\s\S]*?\b(revenue|adr|occupancy|occ)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*([km])?\s*(%)?/i);
   const match = scenarioFieldMatch || metricFirstMatch;
   if (!match) return null;
   const explicitScenarioText = scenarioFieldMatch ? match[1] || "" : "";
   const rawField = String(scenarioFieldMatch ? match[2] : match[1]).toLowerCase();
   const field = rawField === "occ" ? "occupancy" : rawField;
   const numericIndex = scenarioFieldMatch ? 3 : 2;
-  const percentIndex = scenarioFieldMatch ? 4 : 3;
-  const numeric = Number(String(match[numericIndex] || "").replace(/,/g, ""));
-  if (!Number.isFinite(numeric)) return null;
+  const suffixIndex = scenarioFieldMatch ? 4 : 3;
+  const percentIndex = scenarioFieldMatch ? 5 : 4;
+  const numeric = parseMagnitudeNumber(String(match[numericIndex] || ""), String(match[suffixIndex] || ""));
+  if (numeric === null || !Number.isFinite(numeric)) return null;
   const value = field === "occupancy" && match[percentIndex] ? numeric / 100 : numeric;
   return {
     field: field as Exclude<AdjustmentField, "numbers">,
@@ -606,7 +651,7 @@ function parseAbsoluteMetricRequest(text: string) {
 }
 
 function parseConstraints(text: string, defaultScenarios: AdjustmentScenarioKey[]) {
-  const matches = [...text.matchAll(/\b(?:leave|keep)\b[\s\S]*?\b(optimized|balanced|conservative|high|medium|low)?[\s\S]*?\b(adr|occupancy|occ|revenue)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*(%)?/gi)];
+  const matches = [...text.matchAll(/\b(?:leave|keep)\b[\s\S]*?\b(optimized|balanced|conservative|high|medium|low)?[\s\S]*?\b(adr|occupancy|occ|revenue)\b[\s\S]*?\b(?:at|to)\s*\$?([\d,]+(?:\.\d+)?)\s*([km])?\s*(%)?/gi)];
   const constraints: AdjustmentConstraint[] = [];
   for (const match of matches) {
     const explicitScenarioText = match[1] || "";
@@ -619,16 +664,16 @@ function parseConstraints(text: string, defaultScenarios: AdjustmentScenarioKey[
 
     const rawField = String(match[2] || "").toLowerCase();
     const field = (rawField === "occ" ? "occupancy" : rawField) as Exclude<AdjustmentField, "numbers">;
-    const numeric = Number(String(match[3] || "").replace(/,/g, ""));
-    if (!Number.isFinite(numeric)) continue;
-    const value = field === "occupancy" && match[4] ? numeric / 100 : numeric;
+    const numeric = parseMagnitudeNumber(String(match[3] || ""), String(match[4] || ""));
+    if (numeric === null || !Number.isFinite(numeric)) continue;
+    const value = field === "occupancy" && match[5] ? numeric / 100 : numeric;
     constraints.push({ scenarios, field, mode: "set", value });
   }
   return { kind: "ok" as const, constraints };
 }
 
 function isAdjustmentLike(text: string) {
-  return /\b(adjust|bring|lower|reduce|decrease|increase|raise|bump|set|put|make|keep|leave)\b/i.test(text) &&
+  return /\b(adjust|bring|drop|lower|reduce|decrease|increase|raise|bump|set|put|make|keep|leave)\b/i.test(text) &&
     (/\b(adr|occupancy|occ|revenue|numbers|projections)\b/i.test(text) || /\d+(?:\.\d+)?\s?%/.test(text) || /\$\s*[\d,]+/.test(text));
 }
 
@@ -659,6 +704,45 @@ function appendConstraintSummary(summary: string, constraints: AdjustmentConstra
     return `kept ${scenarioListLabel(constraint.scenarios)} ${fieldLabel(constraint.field)} at ${rendered}`;
   });
   return `${summary} Also ${parts.join(" and ")}.`;
+}
+
+function parseRelativeScenarioAdjustment(
+  text: string,
+  field: AdjustmentField,
+  scenarios: AdjustmentScenarioKey[],
+) {
+  const anchorScenarios = affirmedScenariosFromText(text);
+  if (anchorScenarios.length !== 1) return null;
+
+  const factor = parseSignedFactor(text);
+  if (!factor) return null;
+
+  const anchorScenario = anchorScenarios[0];
+  const targetScenarios = scenarios.filter((scenario) => scenario !== anchorScenario);
+  if (targetScenarios.length === 0) return null;
+
+  if (field === "occupancy" || field === "adr" || field === "revenue" || field === "numbers") {
+    return { anchorScenario, targetScenarios, factor };
+  }
+
+  return null;
+}
+
+function summarizeRelative(field: AdjustmentField, scenarios: AdjustmentScenarioKey[], anchorScenario: AdjustmentScenarioKey, factor: number) {
+  const pct = Math.abs((factor - 1) * 100).toFixed(1);
+  const relation = factor >= 1 ? "above" : "below";
+  const anchorLabel = scenarioLabel(anchorScenario);
+  const targetLabel = scenarioListLabel(scenarios);
+
+  if (field === "occupancy") {
+    return `Kept ${anchorLabel} where you had it and moved ${targetLabel} to ${pct}% ${relation} ${anchorLabel} occupancy while leaving ADR unchanged.`;
+  }
+
+  if (field === "adr") {
+    return `Kept ${anchorLabel} where you had it and moved ${targetLabel} to ${pct}% ${relation} ${anchorLabel} ADR while leaving occupancy unchanged.`;
+  }
+
+  return `Kept ${anchorLabel} where you had it and moved ${targetLabel} to ${pct}% ${relation} ${anchorLabel} revenue, with ${targetLabel} ADR scaled ${factor >= 1 ? "up" : "down"} and occupancy left unchanged.`;
 }
 
 export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
@@ -728,6 +812,26 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
   const factor = parseSignedFactor(text);
   if (!factor) {
     return { kind: "clarify", message: "I can handle percentage-based ADR, occupancy, revenue, or projection changes. Rephrase with the metric and amount you want changed." };
+  }
+
+  const relative = parseRelativeScenarioAdjustment(text, field, scenarios);
+  if (relative) {
+    return {
+      kind: "ok",
+      spec: {
+        scenarios: relative.targetScenarios,
+        field,
+        mode: "relative",
+        value: relative.factor,
+        constraints,
+        anchorScenario: relative.anchorScenario,
+        category: field === "occupancy" ? "occupancy-relative" : field === "adr" ? "adr-relative" : "anchored-comparison",
+        summary: appendConstraintSummary(
+          summarizeRelative(field, relative.targetScenarios, relative.anchorScenario, relative.factor),
+          constraints,
+        ),
+      },
+    };
   }
 
   const summary = appendConstraintSummary(summarizeScale(field, scenarios, factor), constraints);
@@ -828,6 +932,18 @@ export function applyStructuredAdjustment(data: EvalData, spec: AdjustmentSpec) 
   for (const scenario of spec.scenarios) {
     if (spec.mode === "scale") {
       scaleScenarioMetric(data, scenario, spec.field, spec.value);
+    } else if (spec.mode === "relative") {
+      if (!spec.anchorScenario) {
+        throw new Error("Relative adjustments require an anchor scenario.");
+      }
+      const anchor = projectionScenario(baseline, spec.anchorScenario);
+      if (spec.field === "occupancy") {
+        setScenarioMetric(data, scenario, "occupancy", anchor.occupancy * spec.value);
+      } else if (spec.field === "adr") {
+        setScenarioMetric(data, scenario, "adr", anchor.adr * spec.value);
+      } else {
+        setScenarioMetric(data, scenario, "revenue", anchor.revenue * spec.value);
+      }
     } else {
       setScenarioMetric(data, scenario, spec.field as Exclude<AdjustmentField, "numbers">, spec.value);
     }
@@ -862,6 +978,20 @@ export function applyStructuredAdjustment(data: EvalData, spec: AdjustmentSpec) 
       }
       if (spec.field === "revenue" && !approximatelyEqual(afterScenario.revenue, Math.round(beforeScenario.revenue * spec.value), 1)) {
         throw new Error(`Adjustment validation failed for ${scenarioLabel(scenario)} revenue.`);
+      }
+    } else if (spec.mode === "relative") {
+      if (!spec.anchorScenario) {
+        throw new Error("Relative adjustments require an anchor scenario.");
+      }
+      const anchor = projectionScenario(baseline, spec.anchorScenario);
+      if (spec.field === "occupancy" && !approximatelyEqual(afterScenario.occupancy, clampOccupancy(anchor.occupancy * spec.value), 0.005)) {
+        throw new Error(`Adjustment validation failed for ${scenarioLabel(scenario)} occupancy relative target.`);
+      }
+      if (spec.field === "adr" && !approximatelyEqual(afterScenario.adr, Math.round(anchor.adr * spec.value), 1)) {
+        throw new Error(`Adjustment validation failed for ${scenarioLabel(scenario)} ADR relative target.`);
+      }
+      if ((spec.field === "revenue" || spec.field === "numbers") && !approximatelyEqual(afterScenario.revenue, Math.round(anchor.revenue * spec.value), 1)) {
+        throw new Error(`Adjustment validation failed for ${scenarioLabel(scenario)} revenue relative target.`);
       }
     } else {
       const target = spec.value;
@@ -900,7 +1030,7 @@ export function maybeParsePercentAdjustment(text: string) {
   const percentMatch = lower.match(/(\d+(?:\.\d+)?)\s?%/);
   if (!percentMatch) return null;
   const value = Number(percentMatch[1]) / 100;
-  if (lower.includes("down") || lower.includes("decrease") || lower.includes("lower") || lower.includes("reduce")) {
+  if (lower.includes("down") || lower.includes("decrease") || lower.includes("drop") || lower.includes("lower") || lower.includes("reduce")) {
     return 1 - value;
   }
   if (lower.includes("up") || lower.includes("increase") || lower.includes("raise") || lower.includes("bump")) {
@@ -917,7 +1047,7 @@ export function maybeDirectionalAdjustment(text: string) {
   if (lower.includes("far too low")) return 1.15;
   if (lower.includes("too low") || lower.includes("bump numbers up") || lower.includes("bump up")) return 1.1;
 
-  if ((lower.includes("down") || lower.includes("decrease") || lower.includes("lower") || lower.includes("reduce")) && !lower.match(/\d+(?:\.\d+)?\s?%/)) {
+  if ((lower.includes("down") || lower.includes("decrease") || lower.includes("drop") || lower.includes("lower") || lower.includes("reduce")) && !lower.match(/\d+(?:\.\d+)?\s?%/)) {
     return 0.9;
   }
 

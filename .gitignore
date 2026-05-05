@@ -18,6 +18,8 @@ data/inbox/
 .hermes.env
 .hermes-runtime/
 *.log
+results.tsv
+autoresearch.jsonl
 .DS_Store
 
 # Local template/image scratch outputs

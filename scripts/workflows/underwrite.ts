@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type { EvalData } from "../write-sheet-data.ts";
-import { repoRoot } from "./lib.ts";
+import type { EvalData, EvalGroundingSource } from "../write-sheet-data.ts";
+import { inferUnderwriteDecision } from "./underwrite-decision.ts";
 
 export type UnderwriteInput = {
   listingId: string;
@@ -32,6 +32,8 @@ export type UnderwriteInput = {
   description?: string;
   latitude?: number;
   longitude?: number;
+  groundingSummary?: string;
+  groundingSources?: EvalGroundingSource[];
 };
 
 type AdrBand = {
@@ -42,6 +44,7 @@ type AdrBand = {
 
 type EvalScenario = NonNullable<EvalData["projections"]>["high"];
 
+const repoRoot = resolve(import.meta.dirname, "../..");
 const marketKnowledgePath = resolve(repoRoot, "data/market-knowledge.md");
 const defaultEligibleCities = ["park city", "hideout", "heber city", "midway", "kamas", "oakley"];
 const configuredEligibleCities = new Set(
@@ -251,6 +254,61 @@ function buildFallbackMethodology(input: UnderwriteInput, propertyType: string, 
   return `Projections generated from Zillow listing facts using ${anchor} as the anchor, plus bedroom-count, property-type, and STR-permission heuristics. This is not a Park City market-knowledge underwrite and should be treated as a lower-confidence on-demand estimate for a ${propertyType.toLowerCase()}. Balanced occupancy was anchored around ${Math.round(baseOcc * 100)}% with scenario spreads applied above and below that baseline.`;
 }
 
+function toolSourceForListingSource(listingSource: string) {
+  if (/zillow/i.test(listingSource)) return "zillow_scrape";
+  if (/mls|flex/i.test(listingSource)) return "flexmls_scrape";
+  if (/new_listing/i.test(listingSource)) return "mls_watcher";
+  return "listing_ingest";
+}
+
+function buildGrounding(input: UnderwriteInput, region: string, methodology: string, comparableCount: number) {
+  const sources: EvalGroundingSource[] = [...(input.groundingSources || [])];
+  const listingUrl = String(input.listingUrl || "").trim();
+  const listingSource = String(input.listingSource || "").trim();
+
+  if (listingUrl) {
+    sources.push({
+      kind: "listing",
+      label: input.identifierLabel ? `${input.identifierLabel} source listing` : "source listing",
+      url: listingUrl,
+      note: input.address || "",
+    });
+  }
+
+  sources.push({
+    kind: "tool",
+    label: "listing acquisition tool",
+    tool: toolSourceForListingSource(listingSource),
+    note: listingSource || "listing_input",
+  });
+
+  if (region && methodology.includes("data/market-knowledge.md")) {
+    sources.push({
+      kind: "market_knowledge",
+      label: "Park City market knowledge baseline",
+      note: region,
+    });
+  }
+
+  if (comparableCount > 0) {
+    sources.push({
+      kind: "tool",
+      label: "underwrite comparable synthesis",
+      tool: "heuristic_comparable_builder",
+      note: `${comparableCount} comparable benchmark${comparableCount === 1 ? "" : "s"}`,
+    });
+  }
+
+  return {
+    summary: input.groundingSummary || sources
+      .map((source) => source.kind === "tool"
+        ? `${source.label || "tool"} via ${source.tool || "tool"}`
+        : source.label || source.kind || "source")
+      .join("; "),
+    sources,
+  };
+}
+
 async function parseAdrBands() {
   const raw = await readFile(marketKnowledgePath, "utf8");
   const rows = raw.split("\n").filter((line) => line.startsWith("| ") && line.includes("$"));
@@ -371,6 +429,13 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     confidence,
   };
 
+  const { decision, decisionReason } = inferUnderwriteDecision({
+    comparableCount: comparables.length,
+    confidence,
+    methodology,
+    region,
+  });
+
   const evalData: EvalData = {
     address: input.address,
     mlsNumber: input.listingId,
@@ -387,12 +452,15 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     propertyType,
     narrative,
     methodology,
+    decision,
+    decisionReason,
     photos: input.photoUrls || [],
     projections,
     comparables,
     rentZestimate: input.rentZestimate || 0,
     region,
     confidence,
+    grounding: buildGrounding(input, region, methodology, comparables.length),
   };
 
   return {

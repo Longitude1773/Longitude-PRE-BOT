@@ -8,19 +8,29 @@ The project uses Supabase (hosted Postgres) for data storage. The Supabase Table
 
 ### Setup
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run the DDL from `scripts/migrate-to-supabase.ts` (or the SQL in the migration plan) in the Supabase SQL Editor to create the 5 tables: `listings`, `evaluations`, `monthly_projections`, `comparables`, `adjustments`
-3. Disable RLS on all tables (private bot, no public API):
+2. Create the 6 tables in `public`: `listings`, `evaluations`, `monthly_projections`, `comparables`, `adjustments`, `on_demand_requests`
+3. In the Supabase SQL Editor, run [sql/2026-04-14-on-demand-requests.sql](/Users/spencerlee/projects/str-revenue-bot/sql/2026-04-14-on-demand-requests.sql) to add the on-demand request registry. That table is the single-flight control plane for on-demand Zillow and MLS evals, with a unique `request_key` plus lease fields for cross-process ownership.
+4. In the Supabase SQL Editor, run [`supabase/enable_rls.sql`](/Users/spencerlee/projects/str-revenue-bot/supabase/enable_rls.sql) to keep those tables private:
    ```sql
-   ALTER TABLE listings DISABLE ROW LEVEL SECURITY;
-   ALTER TABLE evaluations DISABLE ROW LEVEL SECURITY;
-   ALTER TABLE monthly_projections DISABLE ROW LEVEL SECURITY;
-   ALTER TABLE comparables DISABLE ROW LEVEL SECURITY;
-   ALTER TABLE adjustments DISABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.evaluations ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.monthly_projections ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.comparables ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.adjustments ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.on_demand_requests ENABLE ROW LEVEL SECURITY;
    ```
-4. Copy your project URL and anon key from **Settings → API** into `.env`:
+5. Copy your project URL and backend-only key from **Settings → API** into `.env`:
    ```
    SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_SECRET_KEY=your-secret-key
+   # or, for older projects:
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   ```
+6. Do not use the anon or publishable key for these server-side scripts. They need a backend-only key so RLS can remain enabled.
+7. If you are loading historical data, source `.env` and run:
+   ```bash
+   set -a && source .env && set +a
+   npx tsx scripts/migrate-to-supabase.ts
    ```
 
 Use `Listing Source` values:
@@ -60,6 +70,30 @@ Copy `.env.example` to `.env` and fill in all values:
 ```bash
 cp .env.example .env
 ```
+
+Operationally relevant tuning:
+- `ON_DEMAND_REQUEST_LEASE_MS`
+  How long one workflow runner owns an on-demand request before another runner may reclaim it.
+- `ON_DEMAND_REQUEST_LEASE_POLL_MS`
+  How often duplicate runners poll the request registry while waiting on the active owner.
+- `BROWSER_BACKEND`
+  Set to `browser-run` to use Cloudflare Browser Run instead of local Playwright browsers.
+- `FLEXMLS_BROWSER_BACKEND`, `FLEXMLS_ON_DEMAND_BROWSER_BACKEND`, and `ZILLOW_BROWSER_BACKEND`
+  Optional per-surface overrides. Use these when you want to keep the FlexMLS watcher local but send only on-demand MLS fetches or Zillow to Browser Run.
+- `FLEXMLS_ON_DEMAND_BROWSER_RUN_REUSE_SESSION`
+  When `true`, the watcher saves the dedicated MLS on-demand Browser Run `sessionId` locally and attempts to reconnect to the same remote browser on restart while it is still alive.
+- `CLOUDFLARE_BROWSER_RUN_ACCOUNT_ID` and `CLOUDFLARE_BROWSER_RUN_API_TOKEN`
+  Required whenever any backend is set to `browser-run`. Create a Cloudflare API token with `Browser Rendering - Edit` permission.
+- `CLOUDFLARE_BROWSER_RUN_KEEP_ALIVE_MS`
+  How long Cloudflare should keep the remote browser session alive between watcher actions. Default is `600000` (10 minutes).
+- `ZILLOW_BROWSER_RUN_REUSE_SESSION`
+  When `true`, the watcher saves the Zillow Browser Run `sessionId` locally and attempts to reconnect to the same remote browser on restart while it is still alive.
+
+Browser Run notes:
+- The watcher currently uses local Playwright profile dirs for FlexMLS and Zillow. In `browser-run` mode those become remote, session-scoped browsers, so cookies and trusted-device state do not survive process restarts the way local profile directories do.
+- The upside is you can debug the remote session with Cloudflare Live View / Human in the Loop while keeping the repo code on plain Playwright.
+- With Zillow specifically, the watcher now attempts session reuse before falling back to a fresh Browser Run browser. The saved session record lives under `data/inbox/zillow-browser-run-session.json`.
+- With FlexMLS on-demand specifically, the watcher can keep the hot-sheet scanner local while lazily creating a separate Browser Run session only when a `scrape_mls_listing` command arrives. The saved session record lives under `data/inbox/flexmls-on-demand-browser-run-session.json`.
 
 ## 5. Install Dependencies
 
@@ -141,6 +175,7 @@ npx tsx scripts/workflows/update-market-knowledge.ts --instruction "update marke
 npm run workflow:mls-status
 npx tsx scripts/workflows/submit-mls-2fa.ts --code 123456 --by slack
 npm run watch:mls
+npm run browser:smoke -- https://www.zillow.com/
 ```
 `watch:mls` now loads both `.env` and `.hermes.env` automatically, same as `hermes:start`.
 

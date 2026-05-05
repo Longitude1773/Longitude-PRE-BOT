@@ -20,7 +20,13 @@
     "workflow:status": "tsx scripts/workflows/status.ts",
     "workflow:mls-status": "tsx scripts/workflows/mls-status.ts",
     "workflow:submit-mls-2fa": "tsx scripts/workflows/submit-mls-2fa.ts",
+    "autoresearch:bench": "node --import tsx scripts/autoresearch/benchmark-underwrite.ts",
+    "autoresearch:review-reward": "node --import tsx scripts/autoresearch/benchmark-review-reward.ts",
+    "autoresearch:checks": "bash ./autoresearch.checks.sh",
+    "autoresearch:refresh-benchmark": "node --import tsx scripts/autoresearch/build-underwrite-benchmark.ts",
+    "autoresearch:refresh-review-reward": "node --import tsx scripts/autoresearch/build-review-reward-benchmark.ts",
     "watch:mls": "bash scripts/hermes/start-mls-watch.sh",
+    "browser:smoke": "tsx scripts/browser-smoke.ts",
     "str:start": "bash scripts/hermes/start-str-stack.sh",
     "hermes:preflight": "tsx scripts/hermes/preflight.ts",
     "hermes:start": "bash scripts/hermes/start-gateway.sh"

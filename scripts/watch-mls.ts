@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, appendFile, writeFile, readFile, rename } from "node:fs/promises";
 import { resolve } from "node:path";
-import { chromium, type BrowserContext, type Frame, type Page } from "playwright";
+import { type BrowserContext, type Frame, type Page } from "playwright";
+import { getBrowserBackend, launchConfiguredPersistentContext, listBrowserRunTargets, type ManagedBrowserContext } from "./browser-runtime.ts";
+import { markOnDemandRequestForCommand } from "./workflows/on-demand-request-store.ts";
 import { isFlexMlsUrl, type OnDemandListingScrape } from "./workflows/on-demand-listing.ts";
 import { extractZillowListingFromPage, extractZpid, isZillowBlocked } from "./workflows/zillow.ts";
 
@@ -10,6 +12,8 @@ const inboxDir = resolve(repoRoot, "data/inbox");
 const mhtmlDir = resolve(inboxDir, "mhtml");
 const htmlDebugDir = resolve(inboxDir, "html-debug");
 const profileDir = resolve(repoRoot, ".playwright/flexmls-profile");
+const mlsOnDemandProfileDir = resolve(repoRoot, ".playwright/flexmls-on-demand-profile");
+const zillowProfileDir = resolve(repoRoot, ".playwright/zillow-profile");
 const heartbeatLog = resolve(inboxDir, "mls-watch.log");
 const stateFile = resolve(inboxDir, "mls-watch-state.json");
 const commandFile = resolve(inboxDir, "mls-commands.jsonl");
@@ -17,6 +21,8 @@ const processedCommandFile = resolve(inboxDir, "mls-commands.processed.jsonl");
 const commandResultsFile = resolve(inboxDir, "mls-command-results.jsonl");
 const linkHealingQueueFile = resolve(inboxDir, "mls-link-healing-queue.json");
 const approvalAlertStateFile = resolve(inboxDir, "mls-approval-alert-state.json");
+const mlsOnDemandBrowserRunSessionFile = resolve(inboxDir, "flexmls-on-demand-browser-run-session.json");
+const zillowBrowserRunSessionFile = resolve(inboxDir, "zillow-browser-run-session.json");
 
 const baseUrl = process.env.FLEXMLS_URL;
 const username = process.env.FLEXMLS_USERNAME;
@@ -29,6 +35,10 @@ const stopAfterStep4 = (process.env.FLEXMLS_STOP_AFTER_STEP4 || "false").toLower
 const stopAfterHotSheet = (process.env.FLEXMLS_STOP_AFTER_HOTSHEET || "false").toLowerCase() === "true";
 const stopAfterPermalink = (process.env.FLEXMLS_STOP_AFTER_PERMALINK || "false").toLowerCase() === "true";
 const debugHtmlSnapshotsEnabled = (process.env.FLEXMLS_DEBUG_HTML || "true").toLowerCase() !== "false";
+const zillowBrowserChannel = (process.env.ZILLOW_BROWSER_CHANNEL || "chrome").trim();
+const zillowHeadless = (process.env.ZILLOW_HEADLESS || String(headless)).toLowerCase() === "true";
+const zillowWarmUrl = process.env.ZILLOW_WARM_URL || "https://www.zillow.com/";
+const zillowBrowserRunReuseSession = (process.env.ZILLOW_BROWSER_RUN_REUSE_SESSION || "true").toLowerCase() !== "false";
 const zillowCaptchaWaitMs = Number(process.env.ZILLOW_CAPTCHA_WAIT_MS || "180000");
 const slackBotToken = process.env.SLACK_BOT_TOKEN;
 const slackAlertTarget =
@@ -46,12 +56,24 @@ const flexmlsHotSheetUrl = process.env.FLEXMLS_HOTSHEET_URL || "https://pc.flexm
 const flexmlsMlsNumberSearchUrl =
   process.env.FLEXMLS_MLS_NUMBER_SEARCH_URL ||
   "https://pc.flexmls.com/cgi-bin/mainmenu.cgi?cmd=url+search/listnum/index.html";
+const watcherViewport = { width: 1440, height: 1000 };
+const mlsBrowserBackend = getBrowserBackend(process.env.FLEXMLS_BROWSER_BACKEND);
+const mlsOnDemandBrowserBackend = getBrowserBackend(
+  process.env.FLEXMLS_ON_DEMAND_BROWSER_BACKEND ||
+  process.env.MLS_ON_DEMAND_BROWSER_BACKEND ||
+  process.env.FLEXMLS_BROWSER_BACKEND,
+);
+const mlsOnDemandBrowserRunReuseSession =
+  (process.env.FLEXMLS_ON_DEMAND_BROWSER_RUN_REUSE_SESSION || "true").toLowerCase() !== "false";
+const zillowBrowserBackend = getBrowserBackend(process.env.ZILLOW_BROWSER_BACKEND);
 // Supabase-backed sheets read
 import { readSheet } from "./sheets.ts";
 
 let twoFactorAlertActive = false;
 let twoFactorAlertRequestedAt = "";
 let shuttingDown = false;
+let mlsOnDemandSession: ManagedBrowserContext | null = null;
+let mlsOnDemandSessionPromise: Promise<ManagedBrowserContext> | null = null;
 
 if (!baseUrl || !username || !password) {
   throw new Error("Missing FLEXMLS_URL, FLEXMLS_USERNAME, or FLEXMLS_PASSWORD.");
@@ -69,6 +91,7 @@ type ScrapeZillowListingCommand = {
   id: string;
   type: "scrape_zillow_listing";
   url: string;
+  requestKey?: string;
   submittedBy?: string;
   createdAt: string;
 };
@@ -77,6 +100,7 @@ type ScrapeMlsListingCommand = {
   id: string;
   type: "scrape_mls_listing";
   url: string;
+  requestKey?: string;
   submittedBy?: string;
   createdAt: string;
 };
@@ -108,6 +132,8 @@ async function ensureDirs() {
   await mkdir(mhtmlDir, { recursive: true });
   await mkdir(htmlDebugDir, { recursive: true });
   await mkdir(profileDir, { recursive: true });
+  await mkdir(mlsOnDemandProfileDir, { recursive: true });
+  await mkdir(zillowProfileDir, { recursive: true });
   await appendFile(commandResultsFile, "");
 }
 
@@ -215,8 +241,126 @@ function isShutdownCancellation(error: unknown) {
 }
 
 async function getPage(context: BrowserContext) {
-  const existing = context.pages()[0];
-  return existing || await context.newPage();
+  const page = context.pages()[0] || await context.newPage();
+  await page.setViewportSize(watcherViewport).catch(() => {});
+  page.setDefaultTimeout(20000);
+  return page;
+}
+
+async function logBrowserRunLiveView(label: string, sessionId: string, preferredUrl?: string) {
+  const targets = await listBrowserRunTargets(sessionId).catch(() => [] as Array<{
+    devtoolsFrontendUrl?: string;
+    title?: string;
+    url?: string;
+  }>);
+  const liveView =
+    (preferredUrl ? targets.find((target) => target.url === preferredUrl)?.devtoolsFrontendUrl : undefined) ||
+    targets[0]?.devtoolsFrontendUrl;
+  if (liveView) {
+    await logLine(`mls watcher: ${label} browser run live view sessionId=${sessionId} url=${liveView}`);
+  }
+}
+
+async function getZillowWarmPage(context: BrowserContext) {
+  const existing = [...context.pages()].reverse().find((candidate) => !candidate.isClosed());
+  const page = existing || await context.newPage();
+  await page.setViewportSize(watcherViewport).catch(() => {});
+  page.setDefaultTimeout(20000);
+
+  const currentUrl = page.url();
+  if (!currentUrl || currentUrl === "about:blank" || !/zillow\.com/i.test(currentUrl)) {
+    await page.goto(zillowWarmUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1500);
+  }
+
+  return page;
+}
+
+async function hardenZillowContext(context: BrowserContext) {
+  await context.setExtraHTTPHeaders({
+    "Accept-Language": "en-US,en;q=0.9",
+  });
+}
+
+async function launchZillowContext() {
+  const options = {
+    headless: zillowHeadless,
+    viewport: watcherViewport,
+    ignoreDefaultArgs: ["--enable-automation"],
+    args: ["--disable-blink-features=AutomationControlled"],
+  };
+
+  if (zillowBrowserBackend === "local" && zillowBrowserChannel) {
+    try {
+      const launched = await launchConfiguredPersistentContext({
+        backend: zillowBrowserBackend,
+        label: "zillow-watch",
+        log: logLine,
+        persistentDir: zillowProfileDir,
+        ...options,
+        channel: zillowBrowserChannel,
+      });
+      await logLine(`mls watcher: launched zillow context with channel=${zillowBrowserChannel}`);
+      return launched;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await logLine(`mls watcher: failed to launch zillow channel=${zillowBrowserChannel}; falling back to bundled chromium error=${message}`);
+    }
+  }
+
+  const launched = await launchConfiguredPersistentContext({
+    backend: zillowBrowserBackend,
+    label: "zillow-watch",
+    log: logLine,
+    persistentDir: zillowProfileDir,
+    browserRunSessionFilePath: zillowBrowserBackend === "browser-run" && zillowBrowserRunReuseSession ? zillowBrowserRunSessionFile : undefined,
+    ...options,
+  });
+  await logLine(
+    zillowBrowserBackend === "browser-run"
+      ? `mls watcher: launched zillow context with Cloudflare Browser Run sessionId=${launched.sessionId || "unknown"}`
+      : "mls watcher: launched zillow context with bundled chromium",
+  );
+  return launched;
+}
+
+async function launchMlsOnDemandContext() {
+  const launched = await launchConfiguredPersistentContext({
+    backend: mlsOnDemandBrowserBackend,
+    label: "flexmls-on-demand",
+    log: logLine,
+    persistentDir: mlsOnDemandProfileDir,
+    browserRunSessionFilePath:
+      mlsOnDemandBrowserBackend === "browser-run" && mlsOnDemandBrowserRunReuseSession
+        ? mlsOnDemandBrowserRunSessionFile
+        : undefined,
+    headless,
+    viewport: watcherViewport,
+  });
+  await logLine(
+    mlsOnDemandBrowserBackend === "browser-run"
+      ? `mls watcher: launched mls on-demand context with Cloudflare Browser Run sessionId=${launched.sessionId || "unknown"}`
+      : "mls watcher: launched dedicated mls on-demand context with bundled chromium",
+  );
+  if (mlsOnDemandBrowserBackend === "browser-run" && launched.sessionId) {
+    await logBrowserRunLiveView("mls on-demand", launched.sessionId).catch(() => {});
+  }
+  return launched;
+}
+
+async function ensureMlsOnDemandSession() {
+  if (mlsOnDemandSession) return mlsOnDemandSession;
+  if (!mlsOnDemandSessionPromise) {
+    mlsOnDemandSessionPromise = launchMlsOnDemandContext()
+      .then((session) => {
+        mlsOnDemandSession = session;
+        return session;
+      })
+      .finally(() => {
+        mlsOnDemandSessionPromise = null;
+      });
+  }
+  return await mlsOnDemandSessionPromise;
 }
 
 async function exportPageMhtml(page: Page, label: string) {
@@ -340,7 +484,9 @@ async function alertUnresolvedApprovalCandidates(candidates: HotSheetListing[]) 
       `Healing queue: ${linkHealingQueueFile}`,
     ].filter(Boolean).join("\n");
 
-    const posted = await postSlackMessage([slackReviewTarget], message, { mention: false });
+    const posted = slackReviewTarget
+      ? await postSlackMessage([slackReviewTarget], message, { mention: false })
+      : false;
     await logLine(
       `mls watcher: approval alert ${posted ? "posted" : "failed"} target=${slackReviewTarget || "none"} newlyBlocked=${JSON.stringify(newlyBlocked)}`
     );
@@ -586,22 +732,76 @@ async function appendCommandResult(result: MlsCommandResult) {
   await appendFile(commandResultsFile, `${JSON.stringify(result)}\n`);
 }
 
-async function handleScrapeMlsListingCommand(context: BrowserContext, basePage: Page, command: ScrapeMlsListingCommand) {
+async function handleScrapeMlsListingCommand(context: BrowserContext, surfacePage: Page, command: ScrapeMlsListingCommand) {
   const listingLabel = safeFileLabel(command.url);
   const page = await context.newPage();
+  await page.setViewportSize(watcherViewport).catch(() => {});
   page.setDefaultTimeout(20000);
 
   try {
     await logLine(`mls watcher: handling mls scrape command id=${command.id} url=${command.url}`);
-    if (isFlexMlsUrl(command.url)) {
-      await loginIfNeeded(basePage).catch(() => {});
-      await warmSearchSurface(basePage).catch(() => {});
+    if (command.requestKey) {
+      await markOnDemandRequestForCommand({
+        requestKey: command.requestKey,
+        commandId: command.id,
+        status: "scraping",
+        error: null,
+      }).catch(() => {});
     }
-    await page.goto(command.url, { waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(2200);
+    if (isFlexMlsUrl(command.url)) {
+      await loginIfNeeded(surfacePage).catch(() => {});
+      const warmPage = await warmSearchSurface(surfacePage).catch(() => surfacePage);
+      await warmPage.bringToFront().catch(() => {});
+      const sessionId =
+        mlsOnDemandBrowserBackend === "browser-run"
+          ? mlsOnDemandSession?.sessionId
+          : undefined;
+      if (sessionId) {
+        await logBrowserRunLiveView("mls on-demand", sessionId, warmPage.url()).catch(() => {});
+      }
+      await warmPage.waitForTimeout(250);
+    }
+    const maxAttempts = isFlexMlsUrl(command.url) ? 3 : 1;
+    let data: OnDemandListingScrape | null = null;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (attempt === 0) {
+        await page.goto(command.url, { waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => {});
+      } else {
+        await logLine(`mls watcher: retrying mls scrape command id=${command.id} attempt=${attempt + 1}/${maxAttempts}`);
+        await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 }).catch(async () => {
+          await page.goto(command.url, { waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => {});
+        });
+      }
+
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(2200 + attempt * 1200);
+
+      try {
+        const candidate = await extractMlsListingFromPage(page, command.url);
+        const looksIncomplete =
+          !candidate.price ||
+          /detail-(?:private|rev\d+)/i.test(candidate.address) ||
+          /^property description$/i.test(candidate.description || "") ||
+          /^property description$/i.test(candidate.nightlyRentalAllowed || "");
+        if (looksIncomplete) {
+          throw new Error(`MLS scrape returned incomplete listing data on attempt ${attempt + 1}.`);
+        }
+        data = candidate;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt + 1 < maxAttempts) continue;
+      }
+    }
+
+    if (!data) {
+      throw lastError instanceof Error ? lastError : new Error(String(lastError || "MLS scrape failed."));
+    }
+
     const htmlPaths = await exportNavigationHtml(page, `on-demand-mls-${listingLabel}-resolved`);
     const mhtmlPath = await exportPageMhtml(page, `on-demand-mls-${listingLabel}-resolved`).catch(() => "");
-    const data = await extractMlsListingFromPage(page, command.url);
     await appendCommandResult({
       commandId: command.id,
       ok: true,
@@ -616,6 +816,14 @@ async function handleScrapeMlsListingCommand(context: BrowserContext, basePage: 
     const htmlPaths = await exportNavigationHtml(page, `on-demand-mls-${listingLabel}-error`).catch(() => [] as string[]);
     const mhtmlPath = await exportPageMhtml(page, `on-demand-mls-${listingLabel}-error`).catch(() => "");
     const message = error instanceof Error ? error.message : String(error);
+    if (command.requestKey) {
+      await markOnDemandRequestForCommand({
+        requestKey: command.requestKey,
+        commandId: command.id,
+        status: "failed",
+        error: message,
+      }).catch(() => {});
+    }
     await appendCommandResult({
       commandId: command.id,
       ok: false,
@@ -633,18 +841,23 @@ async function handleScrapeMlsListingCommand(context: BrowserContext, basePage: 
 
 async function handleScrapeZillowListingCommand(context: BrowserContext, command: ScrapeZillowListingCommand) {
   const zpid = extractZpid(command.url) || safeFileLabel(command.id);
-  const page = await context.newPage();
-  page.setDefaultTimeout(20000);
-  let keepOpen = false;
+  const page = await getZillowWarmPage(context);
 
   try {
     await logLine(`mls watcher: handling zillow scrape command id=${command.id} zpid=${zpid} url=${command.url}`);
+    if (command.requestKey) {
+      await markOnDemandRequestForCommand({
+        requestKey: command.requestKey,
+        commandId: command.id,
+        status: "scraping",
+        error: null,
+      }).catch(() => {});
+    }
     await page.bringToFront().catch(() => {});
     await page.goto(command.url, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(3500);
 
     if (await isZillowBlocked(page)) {
-      keepOpen = true;
       await exportNavigationHtml(page, `zillow-${zpid}-blocked-initial`);
       await logLine(`mls watcher: zillow blocked for zpid=${zpid}; waiting up to ${Math.round(zillowCaptchaWaitMs / 1000)}s for manual solve in live browser`);
       const startedAt = Date.now();
@@ -659,6 +872,14 @@ async function handleScrapeZillowListingCommand(context: BrowserContext, command
       const htmlPaths = await exportNavigationHtml(page, `zillow-${zpid}-blocked-timeout`);
       const mhtmlPath = await exportPageMhtml(page, `zillow-${zpid}-blocked-timeout`).catch(() => "");
       const error = `Zillow is still showing the challenge in the live watcher browser after waiting ${Math.round(zillowCaptchaWaitMs / 1000)} seconds. Solve it in the open tab and retry.`;
+      if (command.requestKey) {
+        await markOnDemandRequestForCommand({
+          requestKey: command.requestKey,
+          commandId: command.id,
+          status: "failed",
+          error,
+        }).catch(() => {});
+      }
       await appendCommandResult({
         commandId: command.id,
         ok: false,
@@ -676,7 +897,6 @@ async function handleScrapeZillowListingCommand(context: BrowserContext, command
     const htmlPaths = await exportNavigationHtml(page, `zillow-${zpid}-resolved`);
     const mhtmlPath = await exportPageMhtml(page, `zillow-${zpid}-resolved`).catch(() => "");
     const data = await extractZillowListingFromPage(page, command.url);
-    keepOpen = false;
     await appendCommandResult({
       commandId: command.id,
       ok: true,
@@ -686,11 +906,19 @@ async function handleScrapeZillowListingCommand(context: BrowserContext, command
       htmlPath: htmlPaths[0],
       mhtmlPath: mhtmlPath || undefined,
     });
-    await logLine(`mls watcher: zillow scrape command completed id=${command.id} zpid=${data.zpid || zpid} address=${JSON.stringify(data.address)}`);
+    await logLine(`mls watcher: zillow scrape command completed id=${command.id} zpid=${data.listingId || zpid} address=${JSON.stringify(data.address)}`);
   } catch (error) {
     const htmlPaths = await exportNavigationHtml(page, `zillow-${zpid}-error`).catch(() => [] as string[]);
     const mhtmlPath = await exportPageMhtml(page, `zillow-${zpid}-error`).catch(() => "");
     const message = error instanceof Error ? error.message : String(error);
+    if (command.requestKey) {
+      await markOnDemandRequestForCommand({
+        requestKey: command.requestKey,
+        commandId: command.id,
+        status: "failed",
+        error: message,
+      }).catch(() => {});
+    }
     await appendCommandResult({
       commandId: command.id,
       ok: false,
@@ -701,20 +929,26 @@ async function handleScrapeZillowListingCommand(context: BrowserContext, command
       mhtmlPath: mhtmlPath || undefined,
     });
     await logLine(`mls watcher: zillow scrape command error id=${command.id} zpid=${zpid} error=${message}`);
-  } finally {
-    if (!keepOpen) {
-      await page.close().catch(() => {});
-    }
   }
 }
 
-async function processWatcherCommands(context: BrowserContext, basePage: Page) {
+async function processWatcherCommands(
+  mlsContext: BrowserContext,
+  basePage: Page,
+  zillowContext: BrowserContext,
+) {
   const commands = await drainCommands(["scrape_zillow_listing", "scrape_mls_listing"]);
   for (const command of commands) {
     if (command.type === "scrape_zillow_listing") {
-      await handleScrapeZillowListingCommand(context, command);
+      await handleScrapeZillowListingCommand(zillowContext, command);
     } else if (command.type === "scrape_mls_listing") {
-      await handleScrapeMlsListingCommand(context, basePage, command);
+      if (mlsOnDemandBrowserBackend === mlsBrowserBackend) {
+        await handleScrapeMlsListingCommand(mlsContext, basePage, command);
+      } else {
+        const onDemandSession = await ensureMlsOnDemandSession();
+        const onDemandPage = await getPage(onDemandSession.context);
+        await handleScrapeMlsListingCommand(onDemandSession.context, onDemandPage, command);
+      }
     }
   }
 }
@@ -1126,6 +1360,84 @@ function collapseWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripHtmlTags(value: string) {
+  return decodeHtmlEntities(
+    value
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/div>/gi, " ")
+      .replace(/<div[^>]*>/gi, " ")
+      .replace(/<\/p>/gi, " ")
+      .replace(/<p[^>]*>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+  );
+}
+
+function extractReportFieldFromHtml(html: string, ...labels: string[]) {
+  for (const label of labels) {
+    const escaped = escapeRegExp(label);
+    const patterns = [
+      new RegExp(`<strong>(?:<[^>]+>|\\s|&nbsp;)*${escaped}(?:<[^>]+>|\\s|&nbsp;|:)*<\\/strong>\\s*<\\/td>\\s*<td[^>]*>([\\s\\S]*?)<\\/td>`, "i"),
+      new RegExp(`<strong>(?:<[^>]+>|\\s|&nbsp;)*${escaped}(?:<[^>]+>|\\s|&nbsp;|:)*<\\/strong>\\s*([\\s\\S]{0,5000}?)(?=(?:<strong>(?:<[^>]+>|\\s|&nbsp;)*[A-Za-z][^<]{0,120}:)|<table|<\\/td>|<\\/tr>)`, "i"),
+    ];
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      const value = collapseWhitespace(stripHtmlTags(match?.[1] || ""));
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+
+function extractReportHeaderIdentityFromHtml(html: string) {
+  const headerCandidates = Array.from(html.matchAll(/<td[^>]*text-align:\s*center[^>]*>([\s\S]*?)<\/td>/gi))
+    .map((match) => collapseWhitespace(stripHtmlTags(match[1] || "")))
+    .filter(Boolean);
+  const headerText = headerCandidates.find((value) => /MLS#:/i.test(value)) || "";
+  const listingId = headerText.match(/MLS#:\s*([A-Za-z0-9-]+)/i)?.[1]?.trim() || "";
+  const beforeStatus = collapseWhitespace(headerText.split(/\b(?:Residential\s+Active|Residential\s+Pending|Active\s+Under\s+Contract|Active|Pending|Closed)\b/i)[0] || "");
+  const cityStateZipMatch = beforeStatus.match(/(.+?)\s+([A-Za-z .'-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  const cityStateZip = cityStateZipMatch ? `${cityStateZipMatch[2].trim()}, ${cityStateZipMatch[3]} ${cityStateZipMatch[4]}` : "";
+  const streetAddress = cityStateZipMatch ? collapseWhitespace(cityStateZipMatch[1].replace(/[,-]\s*$/, "")) : "";
+  return {
+    listingId,
+    streetAddress,
+    city: cityStateZipMatch?.[2]?.trim() || "",
+    state: cityStateZipMatch?.[3]?.trim() || "",
+    zip: cityStateZipMatch?.[4]?.trim() || "",
+    address: [streetAddress, cityStateZip].filter(Boolean).join(", "),
+  };
+}
+
+function extractReportPhotoUrlsFromHtml(html: string) {
+  const matches = Array.from(html.matchAll(/https:\/\/cdn\d+\.photos\.sparkplatform\.com\/[^"'\s>]+/gi));
+  const unique = new Set<string>();
+  for (const match of matches) {
+    const value = decodeHtmlEntities(match[0] || "").trim();
+    if (value) unique.add(value);
+  }
+  return Array.from(unique).slice(0, 12);
+}
+
+function extractReportHeaderPriceFromHtml(html: string) {
+  const match = html.match(/Latest Price:\s*<\/span>\s*\$?([\d,]+)/i)
+    || html.match(/Last List Price:\s*\$?([\d,]+)/i)
+    || html.match(/Original List Price:\s*\$?([\d,]+)/i);
+  return match?.[1] ? `$${match[1]}` : "";
+}
+
+function extractMapCoordinatesFromHtml(html: string) {
+  const match = html.match(/markers=([-\d.]+)%2C([-\d.]+)%2C/i) || html.match(/markers=([-\d.]+),([-\d.]+),/i);
+  return {
+    longitude: toNumber(match?.[1]),
+    latitude: toNumber(match?.[2]),
+  };
+}
+
 function normalizeNightlyRentalAllowed(raw: string) {
   const value = collapseWhitespace(raw).toLowerCase();
   if (!value) return "";
@@ -1245,6 +1557,29 @@ async function collectDetailFieldMap(surface: Page | Frame) {
   return map;
 }
 
+async function collectReportFieldMap(surface: Page | Frame) {
+  const entries = await surface
+    .locator("tr")
+    .evaluateAll((rows) =>
+      rows
+        .map((row) => {
+          const cells = Array.from(row.querySelectorAll("td"));
+          if (cells.length < 2) return null;
+          const label = (cells[0]?.textContent || "").replace(/\s+/g, " ").trim().toLowerCase().replace(/[:\s]+$/g, "");
+          const value = (cells[1]?.textContent || "").replace(/\s+/g, " ").trim();
+          return label && value ? { label, value } : null;
+        })
+        .filter((entry): entry is { label: string; value: string } => Boolean(entry?.label && entry?.value))
+    )
+    .catch(() => [] as Array<{ label: string; value: string }>);
+
+  const map = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.value && !map.has(entry.label)) map.set(entry.label, entry.value);
+  }
+  return map;
+}
+
 function normalizeRelativeOpenHouseDate(raw: string) {
   const value = collapseWhitespace(raw);
   if (!value) return "";
@@ -1351,13 +1686,17 @@ async function trySwitchToParkCityDetailReport(page: Page) {
     return preferred.text || "";
   }).catch(() => "");
 }
-
 async function extractMlsListingFromPage(page: Page, fallbackUrl: string): Promise<OnDemandListingScrape> {
   const [html, title] = await Promise.all([
     page.content(),
     page.title().catch(() => ""),
   ]);
-  const fieldMap = await collectDetailFieldMap(page);
+  const detailFieldMap = await collectDetailFieldMap(page);
+  const reportFieldMap = await collectReportFieldMap(page);
+  const fieldMap = new Map<string, string>(detailFieldMap);
+  for (const [key, value] of reportFieldMap.entries()) {
+    if (value && !fieldMap.has(key)) fieldMap.set(key, value);
+  }
   const openHouses = await collectDetailOpenHouses(page);
   const texts = await collectPageTexts(page);
 
@@ -1371,32 +1710,40 @@ async function extractMlsListingFromPage(page: Page, fallbackUrl: string): Promi
     .filter(Boolean)
     .slice(0, 12);
 
-  const city = decodeHtmlEntities(String(embeddedListing?.City || ""));
-  const state = decodeHtmlEntities(String(embeddedListing?.StateOrProvince || ""));
-  const zip = decodeHtmlEntities(String(embeddedListing?.PostalCode || ""));
-  const streetAddress = decodeHtmlEntities(String(embeddedListing?.StreetAddress || ""));
-  const address = [streetAddress, city && state && zip ? `${city}, ${state} ${zip}` : [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-  const listingId = String(embeddedListing?.ListingId || "").trim();
+  const headerIdentity = extractReportHeaderIdentityFromHtml(html);
+  const headerPrice = extractReportHeaderPriceFromHtml(html);
+  const mapCoordinates = extractMapCoordinatesFromHtml(html);
+  const city = decodeHtmlEntities(String(embeddedListing?.City || "")).trim() || headerIdentity.city;
+  const state = decodeHtmlEntities(String(embeddedListing?.StateOrProvince || "")).trim() || headerIdentity.state;
+  const zip = decodeHtmlEntities(String(embeddedListing?.PostalCode || "")).trim() || headerIdentity.zip;
+  const streetAddress = decodeHtmlEntities(String(embeddedListing?.StreetAddress || "")).trim() || headerIdentity.streetAddress;
+  const address = [streetAddress, city && state && zip ? `${city}, ${state} ${zip}` : [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || headerIdentity.address;
+  const listingId = String(embeddedListing?.ListingId || "").trim() || headerIdentity.listingId;
 
   if (!listingId || !address) {
     throw new Error(`Could not extract MLS listing identity from ${fallbackUrl || title || "the page"}.`);
   }
 
+  const exactNightlyRentalAllowed = fieldMap.get(normalizeDetailFieldLabel("Nightly Rental Allowed")) || "";
+  const inlineNightlyRentalAllowed = texts.map(extractNightlyRentalAllowedFromText).find(Boolean) || "";
   const nightlyRentalAllowed =
-    normalizeNightlyRentalAllowed(getFieldValue(fieldMap, "Nightly Rental Allowed")) ||
-    texts.map(extractNightlyRentalAllowedFromText).find(Boolean) ||
+    normalizeNightlyRentalAllowed(exactNightlyRentalAllowed) ||
+    inlineNightlyRentalAllowed ||
+    normalizeNightlyRentalAllowed(extractReportFieldFromHtml(html, "Nightly Rental Allowed")) ||
     "";
   const nightlyRentalAllowedSource = nightlyRentalAllowed
-    ? (getFieldValue(fieldMap, "Nightly Rental Allowed") ? "mls_detail_field" : "mls_detail_text")
+    ? (exactNightlyRentalAllowed ? "mls_detail_field" : inlineNightlyRentalAllowed ? "mls_detail_text" : "mls_report_html")
     : "";
   const propertyType =
     getFieldValue(fieldMap, "Type", "Property Type") ||
-    String(standardFields.PropertyClass || "").trim();
+    String(standardFields.PropertyClass || "").trim() ||
+    extractReportFieldFromHtml(html, "Type", "Property Type");
   const propertyTypeCode = String(standardFields.PropertyType || "").trim();
-  const subtypeCode = getFieldValue(fieldMap, "Subtype", "Sub Type");
+  const subtypeCode = getFieldValue(fieldMap, "Subtype", "Sub Type") || extractReportFieldFromHtml(html, "Sub-Type", "Subtype", "Sub Type");
   const description =
     getFieldValue(fieldMap, "Description") ||
-    extractMetaContentFromHtml(html, "property", "og:description");
+    extractMetaContentFromHtml(html, "property", "og:description") ||
+    extractReportFieldFromHtml(html, "Remarks - Public", "Public Remarks", "Remarks", "Property Description");
 
   return {
     source: "mls",
@@ -1408,12 +1755,33 @@ async function extractMlsListingFromPage(page: Page, fallbackUrl: string): Promi
     city,
     state,
     zip,
-    price: toNumber(embeddedListing?.CurrentPrice || embeddedListing?.ListPrice || getFieldValue(fieldMap, "Current Price", "List Price")),
-    bedrooms: toNumber(embeddedListing?.BedsTotal || getFieldValue(fieldMap, "Total Bedrooms", "Beds")),
-    bathrooms: toNumber(embeddedListing?.BathsTotal || getFieldValue(fieldMap, "Total Bathrooms", "Baths")),
+    price: toNumber(
+      embeddedListing?.CurrentPrice ||
+      embeddedListing?.ListPrice ||
+      getFieldValue(fieldMap, "Current Price", "List Price") ||
+      extractReportFieldFromHtml(html, "Latest Price", "Current Price", "List Price") ||
+      headerPrice
+    ),
+    bedrooms: toNumber(
+      embeddedListing?.BedsTotal ||
+      getFieldValue(fieldMap, "Total Bedrooms", "Beds") ||
+      extractReportFieldFromHtml(html, "Total Bedrooms", "Beds")
+    ),
+    bathrooms: toNumber(
+      embeddedListing?.BathsTotal ||
+      getFieldValue(fieldMap, "Total Bathrooms", "Total Baths", "Baths") ||
+      extractReportFieldFromHtml(html, "Total Bathrooms", "Total Baths", "Baths")
+    ),
     squareFootage: toNumber(
       getFieldValue(
         fieldMap,
+        "Apx SqFt Total",
+        "Apx SqFt Finished",
+        "Total Living Area",
+        "Total Square Feet",
+        "Finished SqFt"
+      ) || extractReportFieldFromHtml(
+        html,
         "Apx SqFt Total",
         "Apx SqFt Finished",
         "Total Living Area",
@@ -1424,16 +1792,16 @@ async function extractMlsListingFromPage(page: Page, fallbackUrl: string): Promi
     propertyType,
     propertyTypeCode,
     subtypeCode,
-    area: getFieldValue(fieldMap, "Area"),
-    subdivision: getFieldValue(fieldMap, "Subdivision"),
+    area: getFieldValue(fieldMap, "Area") || extractReportFieldFromHtml(html, "Area", "Major Area"),
+    subdivision: getFieldValue(fieldMap, "Subdivision") || extractReportFieldFromHtml(html, "Subdivision"),
     nightlyRentalAllowed,
     nightlyRentalAllowedSource,
     strApproved: nightlyRentalAllowed ? nightlyRentalAllowedStatus(nightlyRentalAllowed) === "approved" : undefined,
-    photoUrls,
+    photoUrls: photoUrls.length > 0 ? photoUrls : extractReportPhotoUrlsFromHtml(html),
     openHouses,
     description,
-    latitude: toNumber(embeddedListing?.Latitude || standardFields.Latitude),
-    longitude: toNumber(embeddedListing?.Longitude || standardFields.Longitude),
+    latitude: toNumber(embeddedListing?.Latitude || standardFields.Latitude) || mapCoordinates.latitude,
+    longitude: toNumber(embeddedListing?.Longitude || standardFields.Longitude) || mapCoordinates.longitude,
   };
 }
 
@@ -1618,6 +1986,7 @@ async function resolveListingUrlFromHotSheetRow(page: Page, listing: HotSheetLis
     for (let pass = 0; pass < 2; pass += 1) {
       for (const target of clickTargets) {
         surface = await goToHotSheetNewListings(warmPage);
+        if (!attempt.rowSelector) continue;
         const freshRow = surface.locator(attempt.rowSelector).first();
         if (!(await freshRow.isVisible().catch(() => false))) continue;
 
@@ -2479,11 +2848,16 @@ async function scanOnce(page: Page) {
   );
 }
 
-async function sleepWithCommandProcessing(context: BrowserContext, page: Page, totalMs: number) {
+async function sleepWithCommandProcessing(
+  mlsContext: BrowserContext,
+  page: Page,
+  zillowContext: BrowserContext,
+  totalMs: number,
+) {
   const sliceMs = 2000;
   const startedAt = Date.now();
   while (!shuttingDown && Date.now() - startedAt < totalMs) {
-    await processWatcherCommands(context, page);
+    await processWatcherCommands(mlsContext, page, zillowContext);
     const remainingMs = totalMs - (Date.now() - startedAt);
     if (remainingMs <= 0) break;
     await page.waitForTimeout(Math.min(sliceMs, remainingMs));
@@ -2492,14 +2866,45 @@ async function sleepWithCommandProcessing(context: BrowserContext, page: Page, t
 
 async function main() {
   await ensureDirs();
-  await logLine(`mls watcher: starting persistent session interval=${intervalSeconds}s headless=${headless} scanEnabled=${scanEnabled}`);
-  const context = await chromium.launchPersistentContext(profileDir, {
+  await logLine(
+    `mls watcher: starting persistent sessions interval=${intervalSeconds}s mlsBackend=${mlsBrowserBackend} mlsOnDemandBackend=${mlsOnDemandBrowserBackend} zillowBackend=${zillowBrowserBackend} mlsHeadless=${headless} zillowHeadless=${zillowHeadless} scanEnabled=${scanEnabled}`,
+  );
+  const mlsSession = await launchConfiguredPersistentContext({
+    backend: mlsBrowserBackend,
+    label: "flexmls-watch",
+    log: logLine,
+    persistentDir: profileDir,
     headless,
-    viewport: { width: 1440, height: 1000 },
+    viewport: watcherViewport,
   });
+  const context = mlsSession.context;
+  const zillowSession = await launchZillowContext();
+  const zillowContext = zillowSession.context;
+  await hardenZillowContext(zillowContext);
 
   const page = await getPage(context);
   page.setDefaultTimeout(20000);
+  try {
+    const zillowPage = await getZillowWarmPage(zillowContext);
+    await logLine(`mls watcher: zillow warm page ready url=${zillowPage.url()}`);
+    if (zillowBrowserBackend === "browser-run" && zillowSession.sessionId) {
+      const targets = await listBrowserRunTargets(zillowSession.sessionId).catch(() => [] as Array<{
+        devtoolsFrontendUrl?: string;
+        title?: string;
+        url?: string;
+      }>);
+      const liveView =
+        targets.find((target) => target.url === zillowPage.url())?.devtoolsFrontendUrl ||
+        targets.find((target) => /zillow\.com/i.test(target.url || ""))?.devtoolsFrontendUrl ||
+        targets[0]?.devtoolsFrontendUrl;
+      if (liveView) {
+        await logLine(`mls watcher: zillow browser run live view sessionId=${zillowSession.sessionId} url=${liveView}`);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await logLine(`mls watcher: zillow warm page preflight failed error=${message}`);
+  }
 
   let stopping = false;
   const shutdown = async (signal: string) => {
@@ -2507,7 +2912,9 @@ async function main() {
     stopping = true;
     shuttingDown = true;
     await logLine(`mls watcher: received ${signal}, shutting down`);
-    await context.close().catch(() => {});
+    await mlsOnDemandSession?.close().catch(() => {});
+    await mlsSession.close().catch(() => {});
+    await zillowSession.close().catch(() => {});
     process.exit(0);
   };
 
@@ -2516,10 +2923,10 @@ async function main() {
 
   while (true) {
     try {
-      await processWatcherCommands(context, page);
+      await processWatcherCommands(context, page, zillowContext);
       if (scanEnabled) {
         await scanOnce(page);
-        await processWatcherCommands(context, page);
+        await processWatcherCommands(context, page, zillowContext);
         if (twoFactorAlertActive && (await looksLoggedIn(page))) {
           twoFactorAlertActive = false;
           await postSlackAlert("FlexMLS watcher cleared the 2FA / trusted-device block and is back in the logged-in session.");
@@ -2545,7 +2952,7 @@ async function main() {
       break;
     }
     try {
-      await sleepWithCommandProcessing(context, page, intervalSeconds * 1000);
+      await sleepWithCommandProcessing(context, page, zillowContext, intervalSeconds * 1000);
     } catch (error) {
       if (isShutdownCancellation(error)) {
         break;
