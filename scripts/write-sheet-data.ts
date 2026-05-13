@@ -191,6 +191,10 @@ export function buildListingRow(input: JsonObject, flags: Record<string, string 
   };
 }
 
+function roundToNearestHundred(n: number) {
+  return Math.round(n / 100) * 100;
+}
+
 export function buildEvaluationRows(input: EvalData, flags: Record<string, string | boolean>) {
   if (!input.mlsNumber || !input.projections) {
     throw new Error("Evaluation JSON must include mlsNumber and projections.");
@@ -211,9 +215,9 @@ export function buildEvaluationRows(input: EvalData, flags: Record<string, strin
     BD: input.bedrooms ?? "",
     BA: input.bathrooms ?? "",
     Version: version,
-    "High Rev": input.projections.high.revenue,
-    "Med Rev": input.projections.medium.revenue,
-    "Low Rev": input.projections.low.revenue,
+    "High Rev": roundToNearestHundred(input.projections.high.revenue),
+    "Med Rev": roundToNearestHundred(input.projections.medium.revenue),
+    "Low Rev": roundToNearestHundred(input.projections.low.revenue),
     "High Occ": input.projections.high.occupancy,
     "Med Occ": input.projections.medium.occupancy,
     "Low Occ": input.projections.low.occupancy,
@@ -229,9 +233,9 @@ export function buildEvaluationRows(input: EvalData, flags: Record<string, strin
   const monthlyRows = input.projections.high.monthly.map((highMonth, index) => ({
     "Eval ID": evalId,
     Month: highMonth.month,
-    "High Rev": highMonth.revenue,
-    "Med Rev": input.projections!.medium.monthly[index]?.revenue ?? "",
-    "Low Rev": input.projections!.low.monthly[index]?.revenue ?? "",
+    "High Rev": roundToNearestHundred(highMonth.revenue),
+    "Med Rev": input.projections!.medium.monthly[index]?.revenue != null ? roundToNearestHundred(input.projections!.medium.monthly[index].revenue) : "",
+    "Low Rev": input.projections!.low.monthly[index]?.revenue != null ? roundToNearestHundred(input.projections!.low.monthly[index].revenue) : "",
     "High Occ": highMonth.occupancy,
     "Med Occ": input.projections!.medium.monthly[index]?.occupancy ?? "",
     "Low Occ": input.projections!.low.monthly[index]?.occupancy ?? "",
