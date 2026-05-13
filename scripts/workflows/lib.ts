@@ -195,7 +195,23 @@ export async function savePostedReviewRecord(record: {
   return { path, record: payload };
 }
 
+function roundToNearestHundred(n: number) {
+  return Math.round(n / 100) * 100;
+}
+
+export function roundProjectionRevenue(data: EvalData) {
+  if (!data.projections) return;
+  for (const scenario of [data.projections.high, data.projections.medium, data.projections.low]) {
+    scenario.revenue = roundToNearestHundred(scenario.revenue);
+    scenario.monthly = scenario.monthly.map((month) => ({
+      ...month,
+      revenue: roundToNearestHundred(month.revenue),
+    }));
+  }
+}
+
 export async function saveEvalData(path: string, data: EvalData) {
+  roundProjectionRevenue(data);
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
@@ -402,6 +418,7 @@ export async function buildReviewMessage(data: EvalData) {
 }
 
 export async function writeEvaluationVersion(data: EvalData, flags: Record<string, string | boolean>) {
+  roundProjectionRevenue(data);
   const rows = buildEvaluationRows(data, flags);
   await appendSheetRow("Evaluations", rows.evaluationRow);
   for (const row of rows.monthlyRows) await appendSheetRow("Monthly Projections", row);
@@ -410,6 +427,7 @@ export async function writeEvaluationVersion(data: EvalData, flags: Record<strin
 }
 
 export async function writeEvaluationVersionsBatch(entries: Array<{ data: EvalData; flags: Record<string, string | boolean> }>) {
+  for (const entry of entries) roundProjectionRevenue(entry.data);
   const rowSets = entries.map((entry) => buildEvaluationRows(entry.data, entry.flags));
   if (rowSets.length === 0) return rowSets;
 
