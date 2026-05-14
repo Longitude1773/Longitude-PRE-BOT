@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { appendSheetRows, readSheet } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
-import { inferEvalPath, repoRoot, writeEvaluationVersionsBatch } from "./lib.ts";
+import { inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 
 type QueueItem = {
   mlsNumber: string;
@@ -458,6 +458,7 @@ async function processQueue() {
         narrative: buildNarrative(item, region, propertyType, projections.medium.revenue),
         methodology: buildMethodology(region, tier),
       };
+      roundProjectionRevenue(evalData);
       const evalPath = inferEvalPath(item.mlsNumber);
       await writeFile(evalPath, `${JSON.stringify(evalData, null, 2)}\n`);
 

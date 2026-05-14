@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type { EvalData, EvalGroundingSource } from "../write-sheet-data.ts";
+import { roundProjectionRevenue } from "./lib.ts";
 import { inferUnderwriteDecision } from "./underwrite-decision.ts";
 
 export type UnderwriteInput = {
@@ -462,6 +463,7 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     confidence,
     grounding: buildGrounding(input, region, methodology, comparables.length),
   };
+  roundProjectionRevenue(evalData);
 
   return {
     listingData,
