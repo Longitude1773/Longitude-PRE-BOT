@@ -179,7 +179,7 @@ npm run browser:smoke -- https://www.zillow.com/
 ```
 `watch:mls` now loads both `.env` and `.hermes.env` automatically, same as `hermes:start`.
 
-For MLS watcher alerts, set `SLACK_ALERT_USER_ID` in `.hermes.env` to your Slack DM channel ID or Slack user ID. If unset, the watcher falls back to the first ID in `SLACK_ALLOWED_USERS`, then `REVIEW_BUFFER_CHANNEL_ID`.
+For MLS watcher alerts, set `SLACK_ALERT_USER_ID` in `.hermes.env` to your Slack DM channel ID or Slack user ID. To prepend an actual Slack @mention in 2FA request messages, also set `SLACK_ALERT_MENTION_USER_ID` to the user ID you want mentioned. If unset, the watcher falls back to the first ID in `SLACK_ALLOWED_USERS`, then `REVIEW_BUFFER_CHANNEL_ID`.
 If the watcher hits a 2FA page, the intended product behavior is: STR bot asks you for the code in Slack, then STR bot queues it through `submit-mls-2fa.ts` so the persistent watcher can enter it.
 Until Slack inbound handling is fully reliable, you can still run `submit-mls-2fa.ts` manually as the fallback.
 
