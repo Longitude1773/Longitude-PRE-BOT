@@ -69,14 +69,16 @@ The Supabase Postgres database has 5 tables (accessible via the Table Editor das
 ### Adjustments
 | Adj ID | Eval ID | MLS # | Timestamp | Requested By | Request Text | Category | Prior High | Prior Med | Prior Low | New High | New Med | New Low | Delta % | Reasoning |
 
-Categories: `finishes`, `location`, `amenities`, `comps`, `seasonality`, `market`, `owner-usage`, `hero-photo`, `photo-framing`, `general-direction`, `other`
+Categories: `revenue`, `adr`, `occupancy`, `classification-tier`, `classification-market`, `classification-amenities`, `general-direction`
 
-Use this tab for ALL feedback — not just projection numbers. Examples:
-- Projection adjustments: "bump numbers down", "ADR too high" → category `general-direction` or specific category
-- Photo adjustments: "use photo 3 instead", "zoom in more" → category `hero-photo` or `photo-framing`
-- For non-numeric adjustments, Prior/New/Delta fields can be descriptive (e.g. Prior="photo-0.jpg", New="photo-2.jpg")
+How to pick a category:
+- `revenue` / `adr` / `occupancy` — the correction targets that specific metric. Default to `revenue` when the user is moving bottom-line numbers ("bump everything down 10%", "balanced should be $60K").
+- `classification-tier` — user is correcting the luxury tier assignment.
+- `classification-market` — user is correcting the market or sub-market assignment.
+- `classification-amenities` — user is correcting the primary or secondary amenity assessment.
+- `general-direction` — qualitative reasoning that doesn't map cleanly to a metric ("premium finishes weren't accounted for").
 
-This tab builds a training set over time. When generating future projections, read past adjustments to identify systematic biases (e.g. if premium finishes consistently get bumped 15-20%, bake that into the initial estimate for similar properties). Photo feedback helps calibrate default hero settings (zoom, focal point, which photo index to use).
+This tab builds a training set over time. When generating future projections, read past adjustments to identify systematic biases (e.g. if premium-finish properties consistently get bumped 15-20%, bake that into the initial estimate for similar properties).
 
 ---
 

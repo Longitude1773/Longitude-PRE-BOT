@@ -1,20 +1,18 @@
-import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 import { reply } from "../slack.ts";
 import {
   applyStructuredAdjustment,
-  appendAdjustmentRow,
   asNumber,
   asString,
   buildProjectionReply,
   cloneEvalData,
-  computeProjectionDelta,
   logSlackEvent,
   parseAdjustmentRequest,
   resolveEvaluationByMls,
   resolveEvaluationByThread,
   saveEvalData,
+  upsertAdjustmentForMls,
   upsertThreadContext,
   updateEvaluationSummaryRow,
   writeEvaluationVersion,
@@ -165,22 +163,15 @@ async function main() {
         "slack-ts": targetThreadTs,
         "pdf-path": asString(row["PDF Path"] || `data/pdfs/${data.mlsNumber}.pdf`),
       });
-      await appendAdjustmentRow({
-        "Adj ID": randomUUID(),
-        "Eval ID": asString(row["Eval ID"]),
-        "MLS #": asString(row["MLS #"]),
-        Timestamp: new Date().toISOString(),
-        "Requested By": user,
-        "Request Text": text,
-        Category: parsed.spec.category,
-        "Prior High": before.projections!.high.revenue,
-        "Prior Med": before.projections!.medium.revenue,
-        "Prior Low": before.projections!.low.revenue,
-        "New High": data.projections!.high.revenue,
-        "New Med": data.projections!.medium.revenue,
-        "New Low": data.projections!.low.revenue,
-        "Delta %": computeProjectionDelta(before, data),
-        Reasoning: reasoning,
+      await upsertAdjustmentForMls({
+        evalId: asString(row["Eval ID"]),
+        mlsNumber: asString(row["MLS #"]),
+        requestedBy: user,
+        requestText: text,
+        category: parsed.spec.category,
+        reasoning,
+        after: data,
+        fallbackBefore: before,
       });
       await reply(channel, targetThreadTs, buildProjectionReply(data, reasoning));
       if (targetThreadTs) {

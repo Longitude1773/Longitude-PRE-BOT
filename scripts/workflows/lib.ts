@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -477,13 +478,6 @@ export function applyScenarioMultiplier(data: EvalData, multiplier: number) {
   return data;
 }
 
-export function computeProjectionDelta(before: EvalData, after: EvalData) {
-  const prior = before.projections!.medium.revenue;
-  const next = after.projections!.medium.revenue;
-  if (!prior) return "";
-  return (((next - prior) / prior) * 100).toFixed(1);
-}
-
 export function cloneEvalData(data: EvalData) {
   return JSON.parse(JSON.stringify(data)) as EvalData;
 }
@@ -493,8 +487,77 @@ export function ensureFileExists(path: string) {
   return path;
 }
 
-export async function appendAdjustmentRow(row: Record<string, unknown>) {
-  await appendSheetRow("Adjustments", row);
+export type AdjustmentCategory =
+  | "revenue"
+  | "adr"
+  | "occupancy"
+  | "classification-tier"
+  | "classification-market"
+  | "classification-amenities"
+  | "general-direction";
+
+export async function upsertAdjustmentForMls(params: {
+  evalId: string;
+  mlsNumber: string;
+  requestedBy: string;
+  requestText: string;
+  category: AdjustmentCategory;
+  reasoning: string;
+  after: EvalData;
+  fallbackBefore: EvalData;
+}) {
+  const afterHigh = params.after.projections!.high.revenue;
+  const afterMed = params.after.projections!.medium.revenue;
+  const afterLow = params.after.projections!.low.revenue;
+  const now = new Date().toISOString();
+  const stampedReasoning = `[${now}] ${params.reasoning}`;
+
+  const existing = (await findSheetRows("Adjustments", "MLS #", params.mlsNumber))[0];
+
+  if (!existing) {
+    const priorHigh = params.fallbackBefore.projections!.high.revenue;
+    const priorMed = params.fallbackBefore.projections!.medium.revenue;
+    const priorLow = params.fallbackBefore.projections!.low.revenue;
+    await appendSheetRow("Adjustments", {
+      "Adj ID": randomUUID(),
+      "Eval ID": params.evalId,
+      "MLS #": params.mlsNumber,
+      Timestamp: now,
+      "Requested By": params.requestedBy,
+      "Request Text": params.requestText,
+      Category: params.category,
+      "Prior High": priorHigh,
+      "Prior Med": priorMed,
+      "Prior Low": priorLow,
+      "New High": afterHigh,
+      "New Med": afterMed,
+      "New Low": afterLow,
+      "Delta %": priorMed ? (((afterMed - priorMed) / priorMed) * 100).toFixed(1) : "",
+      Reasoning: stampedReasoning,
+    });
+    return;
+  }
+
+  const priorMed = Number(existing["Prior Med"]) || 0;
+  const existingReasoning = asString(existing.Reasoning);
+  const accumulatedReasoning = existingReasoning ? `${existingReasoning}\n\n${stampedReasoning}` : stampedReasoning;
+  await updateSheetRow("Adjustments", asString(existing["Adj ID"]), {
+    "Adj ID": asString(existing["Adj ID"]),
+    "Eval ID": params.evalId,
+    "MLS #": params.mlsNumber,
+    Timestamp: now,
+    "Requested By": params.requestedBy,
+    "Request Text": params.requestText,
+    Category: params.category,
+    "Prior High": existing["Prior High"],
+    "Prior Med": existing["Prior Med"],
+    "Prior Low": existing["Prior Low"],
+    "New High": afterHigh,
+    "New Med": afterMed,
+    "New Low": afterLow,
+    "Delta %": priorMed ? (((afterMed - priorMed) / priorMed) * 100).toFixed(1) : "",
+    Reasoning: accumulatedReasoning,
+  });
 }
 
 export type AdjustmentScenarioKey = "high" | "medium" | "low";
@@ -516,7 +579,7 @@ export type AdjustmentSpec = {
   constraints: AdjustmentConstraint[];
   anchorScenario?: AdjustmentScenarioKey;
   propagateScaleTo?: AdjustmentScenarioKey[];
-  category: string;
+  category: AdjustmentCategory;
   summary: string;
 };
 
@@ -779,7 +842,7 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
         mode: "scale",
         value: 1.14,
         constraints: [],
-        category: "finishes",
+        category: "general-direction",
         summary: "Applied a premium-finish uplift to all scenarios' ADR and linked revenue while leaving occupancy unchanged.",
       },
     };
@@ -821,7 +884,7 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
         value: absolute.value,
         constraints,
         propagateScaleTo,
-        category: absolute.field === "revenue" ? "targeted-revenue" : "targeted-metric",
+        category: absolute.field,
         summary: appendConstraintSummary(summary, constraints),
       },
     };
@@ -843,7 +906,7 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
         value: relative.factor,
         constraints,
         anchorScenario: relative.anchorScenario,
-        category: field === "occupancy" ? "occupancy-relative" : field === "adr" ? "adr-relative" : "anchored-comparison",
+        category: field === "occupancy" ? "occupancy" : field === "adr" ? "adr" : "revenue",
         summary: appendConstraintSummary(
           summarizeRelative(field, relative.targetScenarios, relative.anchorScenario, relative.factor),
           constraints,
@@ -861,7 +924,7 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
       mode: "scale",
       value: factor,
       constraints,
-      category: field === "occupancy" ? "occupancy" : field === "adr" ? "adr" : field === "revenue" ? "revenue" : "general-direction",
+      category: field === "occupancy" ? "occupancy" : field === "adr" ? "adr" : "revenue",
       summary,
     },
   };
