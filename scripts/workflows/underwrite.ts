@@ -1,8 +1,17 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
 import type { EvalData, EvalGroundingSource } from "../write-sheet-data.ts";
 import { roundProjectionRevenue } from "./lib.ts";
+import {
+  classify,
+  loadMarketKnowledge,
+  projectMedium,
+  resolveEffectiveGrid,
+  TIER_DISPLAY_NAME,
+  type Classification,
+  type LuxuryTier,
+  type ListingFacts,
+  type MarketKnowledge,
+  type ProjectionResult,
+} from "./market-knowledge.ts";
 import { inferUnderwriteDecision } from "./underwrite-decision.ts";
 
 export type UnderwriteInput = {
@@ -37,16 +46,8 @@ export type UnderwriteInput = {
   groundingSources?: EvalGroundingSource[];
 };
 
-type AdrBand = {
-  standard: [number, number] | null;
-  premium: [number, number] | null;
-  luxury: [number, number] | null;
-};
-
 type EvalScenario = NonNullable<EvalData["projections"]>["high"];
 
-const repoRoot = resolve(import.meta.dirname, "../..");
-const marketKnowledgePath = resolve(repoRoot, "data/market-knowledge.md");
 const defaultEligibleCities = ["park city", "hideout", "heber city", "midway", "kamas", "oakley"];
 const configuredEligibleCities = new Set(
   String(process.env.STR_ELIGIBLE_CITIES || defaultEligibleCities.join(","))
@@ -63,57 +64,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function normalizeRange(text: string) {
-  const match = text.match(/\$(\d[\d,]*)-(?:\$)?(\d[\d,]*)/);
-  if (!match) return null;
-  return [Number(match[1].replace(/,/g, "")), Number(match[2].replace(/,/g, ""))] as [number, number];
-}
-
-function midpoint(range: [number, number] | null, fallback: number) {
-  return range ? (range[0] + range[1]) / 2 : fallback;
-}
-
 function normalizeNightlyRentalAllowed(raw: string) {
   const value = String(raw || "").trim().toLowerCase();
   if (!value) return "";
   if (["yes", "y", "true", "allowed", "approved", "permitted"].includes(value)) return "Yes";
   if (["no", "n", "false", "not allowed", "not approved", "not permitted", "prohibited"].includes(value)) return "No";
   return raw;
-}
-
-function inferRegion(input: UnderwriteInput) {
-  const text = `${input.area || ""} ${input.subdivision || ""} ${input.address || ""}`.toLowerCase();
-  if (text.includes("deer valley")) return "Lower Deer Valley";
-  if (text.includes("canyons")) return "Canyons Village";
-  if (text.includes("park meadows") || text.includes("old town") || text.includes("main st") || text.includes("prospector")) return "Park City Core (Old Town/Main St)";
-  if (text.includes("jeremy") || text.includes("pinebrook") || text.includes("summit park")) return "Pinebrook/Jeremy Ranch";
-  if (text.includes("kimball") || text.includes("newpark") || text.includes("silver creek")) return "Kimball Junction";
-  if (text.includes("jordanelle") || text.includes("hideout") || text.includes("mayflower")) return "Jordanelle";
-  if (text.includes("heber") || text.includes("midway")) return "Heber/Midway";
-  if (text.includes("kamas") || text.includes("oakley")) return "Kamas/Oakley";
-
-  const city = String(input.city || "").toLowerCase();
-  if (city === "park city") return "Park City Core (Old Town/Main St)";
-  if (city === "hideout") return "Jordanelle";
-  if (city === "heber city" || city === "midway") return "Heber/Midway";
-  if (city === "kamas" || city === "oakley") return "Kamas/Oakley";
-  return "";
-}
-
-function inferTier(input: UnderwriteInput, price: number, region: string) {
-  const ppsf = input.squareFootage ? price / input.squareFootage : 0;
-  const text = `${input.area || ""} ${input.subdivision || ""}`.toLowerCase();
-  if (price >= 4_000_000 || ppsf >= 1400 || (region.includes("Deer Valley") && (input.bedrooms || 0) >= 4)) return "luxury" as const;
-  if (price >= 1_500_000 || ppsf >= 800 || text.includes("estate") || text.includes("mountain") || (input.bedrooms || 0) >= 4) return "premium" as const;
-  return "standard" as const;
-}
-
-function inferBedroomMultiplier(bedrooms: number) {
-  if (bedrooms <= 1) return 0.7;
-  if (bedrooms === 2) return 1.0;
-  if (bedrooms === 3) return 1.32;
-  if (bedrooms === 4) return 1.62;
-  return 1.95;
 }
 
 function inferPropertyType(input: UnderwriteInput) {
@@ -198,13 +154,129 @@ function buildComparables(input: UnderwriteInput, region: string, medium: EvalSc
   }));
 }
 
-function buildSupportedNarrative(input: UnderwriteInput, region: string, propertyType: string, mediumRevenue: number) {
-  const areaNote = input.area ? `${input.area} / ${input.subdivision || ""}`.trim() : region;
-  return `${propertyType} in ${areaNote} underwritten off the ${region} market-knowledge baseline. This is an initial review-stage projection built from live listing facts, bedroom count, price point, and submarket heuristics rather than vendor API comps. Balanced revenue comes in around $${mediumRevenue.toLocaleString("en-US")} gross annually before management and operating costs.`;
+function buildSupportedNarrative(input: UnderwriteInput, subMarket: string, propertyType: string, mediumRevenue: number) {
+  const areaNote = input.area ? `${input.area} / ${input.subdivision || ""}`.trim() : subMarket;
+  return `${propertyType} in ${areaNote} underwritten off the ${subMarket} market-knowledge baseline. This is an initial review-stage projection built from the structured market grid, classification, and amenity framework — not vendor API comps. Balanced revenue comes in around $${mediumRevenue.toLocaleString("en-US")} gross annually before management and operating costs.`;
 }
 
-function buildSupportedMethodology(region: string, tier: string) {
-  return `Projections generated from data/market-knowledge.md using the ${region} ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. ${tier === "premium" || tier === "luxury" ? "A premium-tier pricing assumption was used based on price point and positioning. " : "A standard-tier pricing assumption was used. "}High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.`;
+function describeChain(knowledge: MarketKnowledge, classification: Classification): string {
+  const eff = resolveEffectiveGrid(knowledge, classification.subMarket);
+  if (eff.chain.length === 0) {
+    return `${classification.subMarket} (anchor — direct grid lookup)`;
+  }
+  // chain[0] is the current sub-market; the rest are the path to the anchor.
+  const parts: string[] = [];
+  let currentName = eff.chain[0];
+  for (let i = 0; i < eff.chain.length; i++) {
+    const sub = knowledge.subMarkets[eff.chain[i]];
+    if (!sub || sub.kind !== "derived") continue;
+    const factor = sub.revenueFactor;
+    const factorAtTier =
+      typeof factor === "number"
+        ? factor
+        : factor[classification.luxuryTier];
+    const factorLabel = factorAtTier !== undefined ? factorAtTier.toFixed(2) : "n/a (tier not defined)";
+    parts.push(`${currentName} (×${factorLabel} of ${sub.derivedFrom})`);
+    currentName = sub.derivedFrom;
+  }
+  parts.push(`${eff.anchorName} (anchor)`);
+  return parts.join(" → ");
+}
+
+function describeAmenityLift(classification: Classification, knowledge: MarketKnowledge): string {
+  const lines: string[] = [];
+  const primary = classification.amenities.primary;
+  const secondary = classification.amenities.secondary;
+
+  if (primary.length === 0) {
+    lines.push("- Primary amenities: none detected.");
+  } else {
+    const lifts = primary
+      .map((name) => {
+        const def = knowledge.amenityFramework.primaries.find((p) => p.name === name);
+        return { name, lift: def?.lift ?? 0 };
+      })
+      .sort((a, b) => b.lift - a.lift);
+    const largest = lifts[0];
+    const extras = lifts.length - 1;
+    const totalLift = largest.lift + extras * knowledge.amenityFramework.primaryDiminishingReturn;
+    const liftDetail = lifts
+      .map((l, i) => i === 0 ? `${l.name} (+${(l.lift * 100).toFixed(0)}%)` : `${l.name} (+5% diminishing)`)
+      .join(", ");
+    lines.push(`- Primary amenities applied (total +${(totalLift * 100).toFixed(0)}%): ${liftDetail}.`);
+  }
+
+  // Always surface absence of Iconic/unique per V1 spec
+  if (!primary.includes("Iconic/unique")) {
+    lines.push("- Iconic/unique: not auto-detected (V1 never auto-triggers). Flag manually if applicable.");
+  }
+
+  if (secondary.length === 0) {
+    lines.push("- Secondary amenities: none detected.");
+  } else {
+    const hasPrimary = primary.length > 0;
+    const threshold = knowledge.amenityFramework.secondaryThreshold;
+    if (secondary.length < threshold) {
+      lines.push(`- Secondary amenities (${secondary.length}/${threshold} threshold not met, no lift): ${secondary.join(", ")}.`);
+    } else {
+      const lift = hasPrimary
+        ? knowledge.amenityFramework.secondaryLiftWithPrimary
+        : knowledge.amenityFramework.secondaryLiftWithoutPrimary;
+      lines.push(`- Secondary amenities (${secondary.length}, +${(lift * 100).toFixed(0)}% ${hasPrimary ? "with" : "without"} primary): ${secondary.join(", ")}.`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function buildSupportedMethodology(
+  knowledge: MarketKnowledge,
+  classification: Classification,
+  projection: ProjectionResult,
+  input: UnderwriteInput,
+): string {
+  const lines: string[] = [];
+
+  // Classification
+  lines.push(`Market: ${classification.market}.`);
+  lines.push(`Sub-market chain: ${describeChain(knowledge, classification)}.`);
+
+  // Tier
+  const price = input.price || 0;
+  const ppsf = input.squareFootage ? price / input.squareFootage : 0;
+  const tierName = TIER_DISPLAY_NAME[classification.luxuryTier];
+  lines.push(
+    `Tier: ${tierName} — based on price $${price.toLocaleString("en-US")}` +
+      (ppsf > 0 ? ` and PPSF $${Math.round(ppsf).toLocaleString("en-US")}` : ""),
+  );
+  if (classification.tierConfidence === "borderline" && classification.borderlineWith) {
+    lines.push(
+      `  ⚠ Borderline tier — within 10% of the ${TIER_DISPLAY_NAME[classification.borderlineWith as LuxuryTier]} threshold. Verify on review.`,
+    );
+  }
+
+  // Amenities
+  lines.push("Amenity framework:");
+  lines.push(describeAmenityLift(classification, knowledge));
+
+  // Final revenue + back-solve
+  lines.push(`Final balanced revenue (after lifts): $${projection.annualRevenue.toLocaleString("en-US")}.`);
+  lines.push(
+    `Back-solved per-night ADR $${projection.adr} and annual-average occupancy ${(projection.occupancy * 100).toFixed(0)}% against the sub-market's typical ranges for ${tierName}.`,
+  );
+
+  // Sparse-walk and stretch notes from projection
+  if (projection.methodologyNotes.length > 0) {
+    lines.push("Notes:");
+    for (const note of projection.methodologyNotes) lines.push(`- ${note}`);
+  }
+
+  // Scenario derivation
+  lines.push(
+    "Scenarios: Optimized = balanced ADR × 1.12 and occupancy + 10pp; Conservative = balanced ADR × 0.88 and occupancy − 12pp (including new-listing ramp penalty).",
+  );
+
+  return lines.join("\n");
 }
 
 function buildFallbackMediumRevenue(input: UnderwriteInput, propertyType: string, strApproved?: boolean) {
@@ -262,7 +334,7 @@ function toolSourceForListingSource(listingSource: string) {
   return "listing_ingest";
 }
 
-function buildGrounding(input: UnderwriteInput, region: string, methodology: string, comparableCount: number) {
+function buildGrounding(input: UnderwriteInput, region: string, comparableCount: number, usedKnowledge: boolean) {
   const sources: EvalGroundingSource[] = [...(input.groundingSources || [])];
   const listingUrl = String(input.listingUrl || "").trim();
   const listingSource = String(input.listingSource || "").trim();
@@ -283,7 +355,7 @@ function buildGrounding(input: UnderwriteInput, region: string, methodology: str
     note: listingSource || "listing_input",
   });
 
-  if (region && methodology.includes("data/market-knowledge.md")) {
+  if (region && usedKnowledge) {
     sources.push({
       kind: "market_knowledge",
       label: "Park City market knowledge baseline",
@@ -310,22 +382,6 @@ function buildGrounding(input: UnderwriteInput, region: string, methodology: str
   };
 }
 
-async function parseAdrBands() {
-  const raw = await readFile(marketKnowledgePath, "utf8");
-  const rows = raw.split("\n").filter((line) => line.startsWith("| ") && line.includes("$"));
-  const result = new Map<string, AdrBand>();
-  for (const row of rows) {
-    const cells = row.split("|").map((cell) => cell.trim()).filter(Boolean);
-    if (cells.length < 4 || cells[0] === "Area") continue;
-    result.set(cells[0], {
-      standard: normalizeRange(cells[1]),
-      premium: normalizeRange(cells[2]),
-      luxury: normalizeRange(cells[3]),
-    });
-  }
-  return result;
-}
-
 export async function buildUnderwriteBundle(input: UnderwriteInput) {
   const nightlyRentalAllowed = normalizeNightlyRentalAllowed(input.nightlyRentalAllowed || "");
   const strApproved =
@@ -335,12 +391,23 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
       : input.strApproved === false || nightlyRentalAllowed === "No"
         ? false
         : undefined;
-  const region = inferRegion(input);
+  const knowledge = await loadMarketKnowledge();
+  const facts: ListingFacts = {
+    price: input.price,
+    squareFootage: input.squareFootage,
+    bedrooms: input.bedrooms,
+    area: input.area,
+    subdivision: input.subdivision,
+    address: input.address,
+    city: input.city,
+    description: input.description,
+  };
+  const classification = classify(facts, knowledge);
   const propertyType = inferPropertyType(input);
+  const region = classification?.subMarket || "";
   const inferredMarket = inferMarketEligibility(input, region);
   const marketEligible = input.skipMarketGate ? true : inferredMarket.marketEligible;
   const marketEligibleReason = input.skipMarketGate ? "on_demand_override" : inferredMarket.marketEligibleReason;
-  const adrBands = await parseAdrBands();
 
   let projections: NonNullable<EvalData["projections"]>;
   let comparables: NonNullable<EvalData["comparables"]>;
@@ -348,35 +415,16 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
   let methodology = "";
   let confidence = "medium";
 
-  if (region) {
-    const price = input.price || 0;
-    const adrBand = adrBands.get(region) || adrBands.get("Park City Core (Old Town/Main St)");
-    const tier = inferTier(input, price, region);
-    const bedroomMultiplier = inferBedroomMultiplier(input.bedrooms || 2);
-    const baseAdr = midpoint(
-      tier === "luxury"
-        ? adrBand?.luxury || adrBand?.premium || adrBand?.standard || null
-        : tier === "premium"
-          ? adrBand?.premium || adrBand?.standard || null
-          : adrBand?.standard || null,
-      375,
-    ) * bedroomMultiplier * (region.includes("Deer Valley") && tier !== "standard" ? 1.14 : 1);
-
-    let baseOcc = region.includes("Deer Valley") || region.includes("Canyons") ? 0.64 : 0.58;
-    if (region.includes("Heber") || region.includes("Kamas")) baseOcc -= 0.06;
-    if (region.includes("Kimball") || region.includes("Pinebrook")) baseOcc -= 0.03;
-    if (tier === "premium") baseOcc += 0.03;
-    if (tier === "luxury") baseOcc += 0.05;
-    baseOcc = clamp(baseOcc, 0.42, 0.72);
-
+  if (classification) {
+    const projection = projectMedium(input.bedrooms || 2, knowledge, classification);
     projections = {
-      high: buildScenario(baseAdr, baseOcc, 1.12, 0.1),
-      medium: buildScenario(baseAdr, baseOcc, 1, 0),
-      low: buildScenario(baseAdr, baseOcc, 0.88, -0.12),
+      high: buildScenario(projection.adr, projection.occupancy, 1.12, 0.10),
+      medium: buildScenario(projection.adr, projection.occupancy, 1.00, 0.00),
+      low: buildScenario(projection.adr, projection.occupancy, 0.88, -0.12),
     };
-    comparables = buildComparables(input, region, projections.medium);
-    narrative = buildSupportedNarrative(input, region, propertyType, projections.medium.revenue);
-    methodology = buildSupportedMethodology(region, tier);
+    comparables = buildComparables(input, classification.subMarket, projections.medium);
+    narrative = buildSupportedNarrative(input, classification.subMarket, propertyType, projections.medium.revenue);
+    methodology = buildSupportedMethodology(knowledge, classification, projection, input);
     confidence = marketEligible ? "medium" : "low";
   } else {
     const mediumRevenue = buildFallbackMediumRevenue(input, propertyType, strApproved);
@@ -412,12 +460,17 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     state: input.state || "",
     zip: input.zip || "",
     region,
+    market: classification?.market || "",
+    subMarket: classification?.subMarket || "",
+    luxuryTier: classification?.luxuryTier || "",
+    tierConfidence: classification?.tierConfidence,
+    borderlineWith: classification?.borderlineWith,
     price: input.price || 0,
     bedrooms: input.bedrooms || 0,
     bathrooms: input.bathrooms || 0,
     squareFootage: input.squareFootage || 0,
     propertyType,
-    amenities: [input.area, input.subdivision].filter(Boolean),
+    amenities: classification?.amenities || { primary: [], secondary: [] },
     openHouses: input.openHouses || [],
     rentZestimate: input.rentZestimate || 0,
     strEligible: strApproved === false ? "No" : strApproved === true ? "Yes" : "",
@@ -460,8 +513,14 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     comparables,
     rentZestimate: input.rentZestimate || 0,
     region,
+    market: classification?.market || "",
+    subMarket: classification?.subMarket || "",
+    luxuryTier: classification?.luxuryTier || "",
+    tierConfidence: classification?.tierConfidence,
+    borderlineWith: classification?.borderlineWith,
+    amenities: classification?.amenities || { primary: [], secondary: [] },
     confidence,
-    grounding: buildGrounding(input, region, methodology, comparables.length),
+    grounding: buildGrounding(input, region, comparables.length, !!classification),
   };
   roundProjectionRevenue(evalData);
 

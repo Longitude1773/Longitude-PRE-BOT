@@ -172,6 +172,12 @@ async function main() {
         reasoning,
         after: data,
         fallbackBefore: before,
+        classification: {
+          market: asString(data.market),
+          subMarket: asString(data.subMarket),
+          luxuryTier: asString(data.luxuryTier),
+          amenities: data.amenities || { primary: [], secondary: [] },
+        },
       });
       await reply(channel, targetThreadTs, buildProjectionReply(data, reasoning));
       if (targetThreadTs) {

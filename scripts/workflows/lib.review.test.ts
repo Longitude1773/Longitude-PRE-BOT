@@ -1,0 +1,68 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { buildClassificationBlock } from "./lib.ts";
+import type { EvalData } from "../write-sheet-data.ts";
+
+test("buildClassificationBlock: normal path with primary + secondary, no Iconic", () => {
+  const data: EvalData = {
+    market: "Park City",
+    subMarket: "Lower Deer Valley",
+    luxuryTier: "tier-3",
+    tierConfidence: "high",
+    amenities: {
+      primary: ["Ski-in/ski-out access"],
+      secondary: ["Hot tub", "Theater room", "Heated driveway"],
+    },
+  };
+  const block = buildClassificationBlock(data);
+  assert.deepEqual(block, [
+    "📍 Park City • Lower Deer Valley • Tier 3 (Luxury)",
+    "✨ Primary: Ski-in/ski-out access",
+    "   Iconic/unique: not auto-detected — flag manually if applicable",
+    "   Secondary: Hot tub, Theater room, Heated driveway",
+  ]);
+});
+
+test("buildClassificationBlock: borderline tier shows warning line with both display names", () => {
+  const data: EvalData = {
+    market: "Park City",
+    subMarket: "Old Town / Main St",
+    luxuryTier: "tier-2",
+    tierConfidence: "borderline",
+    borderlineWith: "tier-1",
+    amenities: { primary: [], secondary: [] },
+  };
+  const block = buildClassificationBlock(data);
+  assert.equal(block[0], "📍 Park City • Old Town / Main St • Tier 2 (Premium)");
+  assert.ok(
+    block.some((line) => line.includes("borderline between Tier 2 (Premium) and Tier 1 (Standard)")),
+    `Expected borderline warning, got: ${JSON.stringify(block)}`,
+  );
+  assert.ok(block.includes("✨ Primary: none detected"));
+  assert.ok(block.includes("   Iconic/unique: not auto-detected — flag manually if applicable"));
+});
+
+test("buildClassificationBlock: fallback when sub-market missing returns just the warning", () => {
+  const data: EvalData = {};
+  const block = buildClassificationBlock(data);
+  assert.deepEqual(block, [
+    "⚠ Low confidence — sub-market not recognized, using Park City generic baseline.",
+  ]);
+});
+
+test("buildClassificationBlock: Iconic/unique present suppresses the absence prompt", () => {
+  const data: EvalData = {
+    market: "Park City",
+    subMarket: "Upper Deer Valley",
+    luxuryTier: "tier-4",
+    tierConfidence: "high",
+    amenities: {
+      primary: ["Ski-in/ski-out access", "Iconic/unique"],
+      secondary: [],
+    },
+  };
+  const block = buildClassificationBlock(data);
+  assert.ok(block.some((l) => l === "✨ Primary: Ski-in/ski-out access, Iconic/unique"));
+  assert.ok(!block.some((l) => l.includes("Iconic/unique: not auto-detected")), "Iconic-absence line must NOT appear when Iconic is present");
+});

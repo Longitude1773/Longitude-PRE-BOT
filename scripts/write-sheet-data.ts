@@ -46,6 +46,8 @@ export type EvalGrounding = {
 
 export type EvalDecision = "estimate" | "escalate";
 
+export type EvalAmenities = { primary: string[]; secondary: string[] };
+
 export type EvalData = {
   address?: string;
   mlsNumber?: string | number;
@@ -66,6 +68,12 @@ export type EvalData = {
   decisionReason?: string;
   photos?: string[];
   region?: string;
+  market?: string;
+  subMarket?: string;
+  luxuryTier?: string;
+  tierConfidence?: "high" | "borderline";
+  borderlineWith?: string;
+  amenities?: EvalAmenities;
   confidence?: string;
   rentZestimate?: number;
   grounding?: EvalGrounding;
@@ -148,12 +156,10 @@ function getFirstNumber(obj: JsonObject, keys: string[]) {
 function getJsonField(obj: JsonObject, keys: string[]) {
   for (const key of keys) {
     const value = obj[key];
-    if (Array.isArray(value)) {
-      return JSON.stringify(value);
-    }
-    if (typeof value === "string" && value.length > 0) {
-      return value;
-    }
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) return JSON.stringify(value);
+    if (typeof value === "object") return JSON.stringify(value);
+    if (typeof value === "string" && value.length > 0) return value;
   }
   return "[]";
 }
@@ -179,6 +185,9 @@ export function buildListingRow(input: JsonObject, flags: Record<string, string 
     SqFt: getFirstNumber(input, ["SqFt", "squareFootage"]),
     Type: getFirstString(input, ["Type", "propertyType"]),
     "Amenities (JSON)": getJsonField(input, ["Amenities (JSON)", "amenities"]),
+    Market: getFirstString(input, ["Market", "market"]),
+    "Sub-Market": getFirstString(input, ["Sub-Market", "subMarket"]),
+    "Luxury Tier": getFirstString(input, ["Luxury Tier", "luxuryTier"]),
     "STR Eligible": getFirstString(input, ["STR Eligible", "strEligible"]),
     Status: String(flags.status || getFirstString(input, ["Status", "status"]) || "Active"),
     "Listing Date": getFirstString(input, ["Listing Date", "listingDate"]),
@@ -224,6 +233,10 @@ export function buildEvaluationRows(input: EvalData, flags: Record<string, strin
     "Slack Timestamp": slackTimestamp,
     "PDF Path": pdfPath,
     "Created At": createdAt,
+    Market: input.market ?? "",
+    "Sub-Market": input.subMarket ?? "",
+    "Luxury Tier": input.luxuryTier ?? "",
+    "Amenities (JSON)": JSON.stringify(input.amenities ?? { primary: [], secondary: [] }),
   };
 
   const monthlyRows = input.projections.high.monthly.map((highMonth, index) => ({

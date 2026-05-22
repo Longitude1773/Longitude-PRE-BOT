@@ -43,6 +43,9 @@ const COLUMN_MAP: Record<string, Record<string, string>> = {
     SqFt: "sqft",
     Type: "type",
     "Amenities (JSON)": "amenities",
+    Market: "market",
+    "Sub-Market": "sub_market",
+    "Luxury Tier": "luxury_tier",
     "STR Eligible": "str_eligible",
     Status: "status",
     "Listing Date": "listing_date",
@@ -74,6 +77,10 @@ const COLUMN_MAP: Record<string, Record<string, string>> = {
     "Slack Timestamp": "slack_timestamp",
     "PDF Path": "pdf_path",
     "Created At": "created_at",
+    Market: "market",
+    "Sub-Market": "sub_market",
+    "Luxury Tier": "luxury_tier",
+    "Amenities (JSON)": "amenities",
   },
   "Monthly Projections": {
     "Eval ID": "eval_id",
@@ -116,6 +123,10 @@ const COLUMN_MAP: Record<string, Record<string, string>> = {
     "New Low": "new_low",
     "Delta %": "delta_pct",
     Reasoning: "reasoning",
+    Market: "market",
+    "Sub-Market": "sub_market",
+    "Luxury Tier": "luxury_tier",
+    "Amenities (JSON)": "amenities",
   },
 };
 
@@ -139,6 +150,8 @@ const PK_MAP: Record<string, string> = {
 // Columns that store JSON as strings in the old interface but are JSONB in Postgres
 const JSONB_FIELDS: Record<string, Set<string>> = {
   Listings: new Set(["amenities", "photos", "open_house"]),
+  Evaluations: new Set(["amenities"]),
+  Adjustments: new Set(["amenities"]),
 };
 
 // Columns with NUMERIC type — empty strings must become null

@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 
 import { appendSheetRow, appendSheetRows, findSheetRows, readSheet, updateSheetRow } from "../sheets.ts";
 import { buildEvaluationRows, type EvalComparable, type EvalData } from "../write-sheet-data.ts";
+import { TIER_DISPLAY_NAME, type LuxuryTier } from "./market-knowledge.ts";
 
 export const repoRoot = resolve(import.meta.dirname, "../..");
 
@@ -373,6 +374,44 @@ export async function resolveListingUrl(data: EvalData) {
   return listing ? asString(listing.data.listingUrl) : "";
 }
 
+export function buildClassificationBlock(data: EvalData): string[] {
+  const subMarket = asString(data.subMarket);
+  const market = asString(data.market);
+  const tierSlug = asString(data.luxuryTier);
+  const amenities = data.amenities ?? { primary: [], secondary: [] };
+
+  if (!subMarket) {
+    return ["⚠ Low confidence — sub-market not recognized, using Park City generic baseline."];
+  }
+
+  const isKnownTier = tierSlug in TIER_DISPLAY_NAME;
+  const tierName = isKnownTier ? TIER_DISPLAY_NAME[tierSlug as LuxuryTier] : "";
+  const locationLine = [market, subMarket, tierName].filter(Boolean).join(" • ");
+  const lines: string[] = [`📍 ${locationLine}`];
+
+  if (data.tierConfidence === "borderline" && data.borderlineWith) {
+    const otherSlug = String(data.borderlineWith);
+    const otherName = otherSlug in TIER_DISPLAY_NAME
+      ? TIER_DISPLAY_NAME[otherSlug as LuxuryTier]
+      : otherSlug;
+    lines.push(`⚠ Tier classification is borderline between ${tierName} and ${otherName} — please verify.`);
+  }
+
+  const primary = amenities.primary || [];
+  lines.push(primary.length > 0 ? `✨ Primary: ${primary.join(", ")}` : "✨ Primary: none detected");
+
+  if (!primary.includes("Iconic/unique")) {
+    lines.push("   Iconic/unique: not auto-detected — flag manually if applicable");
+  }
+
+  const secondary = amenities.secondary || [];
+  if (secondary.length > 0) {
+    lines.push(`   Secondary: ${secondary.join(", ")}`);
+  }
+
+  return lines;
+}
+
 export async function buildReviewMessage(data: EvalData) {
   const listingUrl = await resolveListingUrl(data);
   const listing = data.mlsNumber ? await loadListingData(data.mlsNumber) : null;
@@ -406,6 +445,8 @@ export async function buildReviewMessage(data: EvalData) {
     openHouseLine,
     listingUrl ? `<${listingUrl}|${listingLinkLabel}>` : "",
     "",
+    ...buildClassificationBlock(data),
+    "",
     "📊 *Revenue Projections*",
     `• Optimized:    ${fmtCurrency(data.projections!.high.revenue)}/yr (${fmtPct(data.projections!.high.occupancy)} occ, ${fmtCurrency(data.projections!.high.adr)} ADR)`,
     `• Balanced:     ${fmtCurrency(data.projections!.medium.revenue)}/yr (${fmtPct(data.projections!.medium.occupancy)} occ, ${fmtCurrency(data.projections!.medium.adr)} ADR)`,
@@ -413,7 +454,7 @@ export async function buildReviewMessage(data: EvalData) {
     "",
     comparableLine,
     "",
-    "💬 Reply in this thread to request adjustments or ask questions about the underwriting.",
+    "💬 Reply to adjust projections OR correct the tier / market / amenity assessment.",
     "Say *approve* when projections look right and I'll generate the PDF.",
   ].filter(Boolean).join("\n");
 }
@@ -505,12 +546,25 @@ export async function upsertAdjustmentForMls(params: {
   reasoning: string;
   after: EvalData;
   fallbackBefore: EvalData;
+  classification?: {
+    market: string;
+    subMarket: string;
+    luxuryTier: string;
+    amenities: { primary: string[]; secondary: string[] };
+  };
 }) {
   const afterHigh = params.after.projections!.high.revenue;
   const afterMed = params.after.projections!.medium.revenue;
   const afterLow = params.after.projections!.low.revenue;
   const now = new Date().toISOString();
   const stampedReasoning = `[${now}] ${params.reasoning}`;
+
+  const classificationFields = {
+    Market: params.classification?.market ?? "",
+    "Sub-Market": params.classification?.subMarket ?? "",
+    "Luxury Tier": params.classification?.luxuryTier ?? "",
+    "Amenities (JSON)": JSON.stringify(params.classification?.amenities ?? { primary: [], secondary: [] }),
+  };
 
   const existing = (await findSheetRows("Adjustments", "MLS #", params.mlsNumber))[0];
 
@@ -534,6 +588,7 @@ export async function upsertAdjustmentForMls(params: {
       "New Low": afterLow,
       "Delta %": priorMed ? (((afterMed - priorMed) / priorMed) * 100).toFixed(1) : "",
       Reasoning: stampedReasoning,
+      ...classificationFields,
     });
     return;
   }
@@ -557,6 +612,7 @@ export async function upsertAdjustmentForMls(params: {
     "New Low": afterLow,
     "Delta %": priorMed ? (((afterMed - priorMed) / priorMed) * 100).toFixed(1) : "",
     Reasoning: accumulatedReasoning,
+    ...classificationFields,
   });
 }
 
