@@ -590,31 +590,30 @@ export type Classification = {
   amenities: { primary: string[]; secondary: string[] };
 };
 
-// Ordered most-specific to least-specific. Lower-priority entries are
-// catch-alls (e.g., bare "heber" or "park city").
+// Ordered most-specific to least-specific. NOTE: do NOT add bare-city catch-alls
+// like "park city" or "heber" here — postal city is matched separately (pass 2)
+// in inferSubMarket, and falling through to "matched: false" routes the listing
+// to the low-confidence generic fallback in underwrite.ts.
 export const SUB_MARKET_KEYWORDS: Array<{ keywords: string[]; name: string; promontoryHint?: boolean }> = [
-  { keywords: ["empire pass", "upper deer valley"], name: "Upper Deer Valley" },
-  { keywords: ["deer valley east village", "east village"], name: "Deer Valley East Village" },
-  { keywords: ["lower deer valley", "deer crest"], name: "Lower Deer Valley" },
-  { keywords: ["canyons"], name: "Canyons Village" },
-  { keywords: ["old town", "main st", "main street", "park meadows", "prospector"], name: "Old Town / Main St" },
-  { keywords: ["glen wild", "racquet club"], name: "Park City North (Glen Wild / Racquet Club)" },
+  { keywords: ["empire pass", "upper deer valley", "silver lake", "bald eagle", "solamere"], name: "Upper Deer Valley" },
+  { keywords: ["deer valley east village", "east village", "deer crest"], name: "Deer Valley East Village" },
+  { keywords: ["lower deer valley", "snow park"], name: "Lower Deer Valley" },
+  { keywords: ["canyons", "the colony", "white pine"], name: "Canyons Village" },
+  { keywords: ["old town", "main st", "main street", "park meadows", "prospector", "marsac", "daly", "norfolk", "park avenue"], name: "Old Town / Main St" },
+  { keywords: ["glen wild", "glenwild", "racquet club", "park city north"], name: "Park City North (Glen Wild / Racquet Club)" },
   { keywords: ["pinebrook", "jeremy ranch", "summit park"], name: "Pinebrook / Jeremy Ranch / Summit Park" },
   { keywords: ["promontory"], name: "East Basin", promontoryHint: true },
   { keywords: ["silver summit"], name: "Silver Summit" },
-  { keywords: ["kimball junction", "newpark", "silver creek"], name: "Kimball Junction" },
-  { keywords: ["lakeside"], name: "Lakeside" },
-  { keywords: ["jordanelle ridge"], name: "Jordanelle Ridge" },
-  { keywords: ["hideout"], name: "Hideout" },
-  { keywords: ["south valley", "francis"], name: "South Valley" },
+  { keywords: ["kimball junction", "newpark", "silver creek", "bear hollow", "kimball"], name: "Kimball Junction" },
+  { keywords: ["lakeside", "jordanelle lakeside", "mayflower", "sky ridge", "jordanelle"], name: "Lakeside" },
+  { keywords: ["jordanelle ridge", "mountain village"], name: "Jordanelle Ridge" },
+  { keywords: ["hideout", "black rock"], name: "Hideout" },
+  { keywords: ["south valley", "francis", "woodland", "victory ranch"], name: "South Valley" },
   { keywords: ["north fields"], name: "North Fields" },
-  { keywords: ["heber mountains"], name: "Heber Mountains" },
-  { keywords: ["heber town", "heber center"], name: "Heber Town Center" },
-  { keywords: ["midway"], name: "Midway" },
-  { keywords: ["heber"], name: "Heber Town Center" },
+  { keywords: ["heber mountains", "heber mountain", "lake creek"], name: "Heber Mountains" },
+  { keywords: ["heber town", "heber center", "heber main street"], name: "Heber Town Center" },
+  { keywords: ["midway", "soldier hollow", "wasatch state park", "homestead"], name: "Midway" },
   { keywords: ["kamas", "oakley", "mirror lake"], name: "Kamas/Oakley" },
-  { keywords: ["jordanelle", "mayflower"], name: "Lakeside" },
-  { keywords: ["park city"], name: "Old Town / Main St" },
 ];
 
 const PRIMARY_AMENITY_ALIASES: Record<string, string[]> = {
@@ -634,8 +633,18 @@ const SECONDARY_AMENITY_ALIASES: Record<string, string[]> = {
 };
 
 function buildCorpus(input: ListingFacts): string {
+  // All-fields corpus; used by inferAmenities.
   return [
     input.area, input.subdivision, input.address, input.city, input.description,
+    ...(input.amenities || []),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function buildStrongCorpus(input: ListingFacts): string {
+  // Strong sub-market signals only; excludes postal city, which is almost
+  // always "Park City, UT" or "Heber City, UT" regardless of actual sub-market.
+  return [
+    input.area, input.subdivision, input.address, input.description,
     ...(input.amenities || []),
   ].filter(Boolean).join(" ").toLowerCase();
 }
@@ -648,11 +657,25 @@ function nextTierOf(t: LuxuryTier): LuxuryTier {
 }
 
 export function inferSubMarket(input: ListingFacts, knowledge: MarketKnowledge): { name: string; matched: boolean; promontoryHint: boolean } {
-  const corpus = buildCorpus(input);
+  // Pass 1: strong-signal fields (description / area / subdivision / address / amenities).
+  const strong = buildStrongCorpus(input);
   for (const entry of SUB_MARKET_KEYWORDS) {
-    if (entry.keywords.some((kw) => corpus.includes(kw))) {
+    if (entry.keywords.some((kw) => strong.includes(kw))) {
       if (knowledge.subMarkets[entry.name]) {
         return { name: entry.name, matched: true, promontoryHint: !!entry.promontoryHint };
+      }
+    }
+  }
+  // Pass 2: postal city as last-resort tiebreaker. Only neighborhood-distinctive
+  // city names like "Kamas" or "Midway" will hit — bare "Park City" / "Heber"
+  // are intentionally absent from the keyword list.
+  const cityCorpus = (input.city || "").toLowerCase();
+  if (cityCorpus) {
+    for (const entry of SUB_MARKET_KEYWORDS) {
+      if (entry.keywords.some((kw) => cityCorpus.includes(kw))) {
+        if (knowledge.subMarkets[entry.name]) {
+          return { name: entry.name, matched: true, promontoryHint: !!entry.promontoryHint };
+        }
       }
     }
   }

@@ -267,9 +267,27 @@ test("inferSubMarket matches keywords against the real knowledge", async () => {
   const kamas = inferSubMarket({ city: "Kamas" }, k);
   assert.equal(kamas.name, "Kamas/Oakley");
 
-  // Park City catch-all → Old Town / Main St
-  const generic = inferSubMarket({ city: "Park City", description: "Cozy mountain home" }, k);
-  assert.equal(generic.name, "Old Town / Main St");
+  // Park City postal city with no neighborhood signal → no match (caller falls
+  // back to PC generic with low confidence). The bare "Park City" catch-all
+  // was removed to stop misclassifying everything as Old Town.
+  const pcNoSignal = inferSubMarket({ city: "Park City", description: "Cozy mountain home" }, k);
+  assert.equal(pcNoSignal.matched, false);
+
+  // Heber City postal city with no neighborhood signal → no match.
+  const heberNoSignal = inferSubMarket({ city: "Heber City", description: "Updated 3 bed home" }, k);
+  assert.equal(heberNoSignal.matched, false);
+
+  // Park City postal with a strong description signal → use the signal.
+  const pcPine = inferSubMarket({ city: "Park City", description: "Beautiful Pinebrook townhome" }, k);
+  assert.equal(pcPine.name, "Pinebrook / Jeremy Ranch / Summit Park");
+  assert.equal(pcPine.matched, true);
+
+  // Heber City postal with Midway/Soldier Hollow signal → Midway.
+  const heberMidway = inferSubMarket({ city: "Heber City", description: "Near Soldier Hollow trails" }, k);
+  assert.equal(heberMidway.name, "Midway");
+
+  const heberMidwayArea = inferSubMarket({ city: "Heber City", area: "Midway" }, k);
+  assert.equal(heberMidwayArea.name, "Midway");
 
   // No keyword match
   const unmatched = inferSubMarket({ city: "Salt Lake City" }, k);
