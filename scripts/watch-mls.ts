@@ -30,6 +30,24 @@ const password = process.env.FLEXMLS_PASSWORD;
 const intervalSeconds = Number(process.env.FLEXMLS_WATCH_INTERVAL_SECONDS || "300");
 const headless = (process.env.FLEXMLS_HEADLESS || "false").toLowerCase() === "true";
 const scanEnabled = (process.env.FLEXMLS_SCAN_ENABLED || "true").toLowerCase() !== "false";
+const scanWindowStartHour = Number(process.env.FLEXMLS_SCAN_WINDOW_START_HOUR || "7");
+const scanWindowEndHour = Number(process.env.FLEXMLS_SCAN_WINDOW_END_HOUR || "19");
+const MOUNTAIN_TIME_ZONE = "America/Denver";
+const mountainHourFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: MOUNTAIN_TIME_ZONE,
+  hour: "numeric",
+  hour12: false,
+});
+const mountainTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: MOUNTAIN_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+function isWithinScanWindow(now: Date = new Date()): boolean {
+  const hour = Number(mountainHourFormatter.format(now));
+  return hour >= scanWindowStartHour && hour < scanWindowEndHour;
+}
 const pauseAfterStep4Seconds = Number(process.env.FLEXMLS_PAUSE_AFTER_STEP4_SECONDS || "90");
 const stopAfterStep4 = (process.env.FLEXMLS_STOP_AFTER_STEP4 || "false").toLowerCase() === "true";
 const stopAfterHotSheet = (process.env.FLEXMLS_STOP_AFTER_HOTSHEET || "false").toLowerCase() === "true";
@@ -2867,7 +2885,7 @@ async function sleepWithCommandProcessing(
 async function main() {
   await ensureDirs();
   await logLine(
-    `mls watcher: starting persistent sessions interval=${intervalSeconds}s mlsBackend=${mlsBrowserBackend} mlsOnDemandBackend=${mlsOnDemandBrowserBackend} zillowBackend=${zillowBrowserBackend} mlsHeadless=${headless} zillowHeadless=${zillowHeadless} scanEnabled=${scanEnabled}`,
+    `mls watcher: starting persistent sessions interval=${intervalSeconds}s mlsBackend=${mlsBrowserBackend} mlsOnDemandBackend=${mlsOnDemandBrowserBackend} zillowBackend=${zillowBrowserBackend} mlsHeadless=${headless} zillowHeadless=${zillowHeadless} scanEnabled=${scanEnabled} scanWindow=${scanWindowStartHour}:00-${scanWindowEndHour}:00MT`,
   );
   const mlsSession = await launchConfiguredPersistentContext({
     backend: mlsBrowserBackend,
@@ -2924,7 +2942,9 @@ async function main() {
   while (true) {
     try {
       await processWatcherCommands(context, page, zillowContext);
-      if (scanEnabled) {
+      const now = new Date();
+      const withinWindow = isWithinScanWindow(now);
+      if (scanEnabled && withinWindow) {
         await scanOnce(page);
         await processWatcherCommands(context, page, zillowContext);
         if (twoFactorAlertActive && (await looksLoggedIn(page))) {
@@ -2932,12 +2952,19 @@ async function main() {
           await postSlackAlert("FlexMLS watcher cleared the 2FA / trusted-device block and is back in the logged-in session.");
         }
       } else {
+        if (scanEnabled && !withinWindow) {
+          await logLine(
+            `mls watcher: outside scan window (MT ${scanWindowStartHour}:00–${scanWindowEndHour}:00, currently MT ${mountainTimeFormatter.format(now)}), skipping scan`,
+          );
+        }
         await saveState({
           mode: "command_only",
           loggedIn: await looksLoggedIn(page).catch(() => false),
           url: page.url(),
           insideFlexmls: false,
-          reason: "FLEXMLS_SCAN_ENABLED=false",
+          reason: !scanEnabled
+            ? "FLEXMLS_SCAN_ENABLED=false"
+            : `outside_scan_window (MT ${scanWindowStartHour}:00-${scanWindowEndHour}:00)`,
         });
       }
     } catch (error) {

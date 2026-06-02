@@ -216,6 +216,8 @@ On Wednesdays starting at 8:00 AM Mountain Time, run in a recurring watch loop f
 
 Important temporary override: when `FLEXMLS_SCAN_ENABLED=false`, do not rely on the background hot-sheet loop. In that mode, the watcher is command-driven only and should be used for on-demand listing requests plus MLS login/session upkeep.
 
+Scan window: even when `FLEXMLS_SCAN_ENABLED=true`, the hot-sheet scan only runs between `FLEXMLS_SCAN_WINDOW_START_HOUR` (default 7) and `FLEXMLS_SCAN_WINDOW_END_HOUR` (default 19) Mountain Time (DST-aware). Outside that window the watcher stays alive — Slack commands and 2FA flows still work — and logs a `outside scan window` line each tick so operators can confirm the bot is live overnight. Adjust the env vars to widen/narrow without code changes.
+
 Important: a fresh cron session will keep logging in and out of FlexMLS. For active watch windows, prefer a single long-lived watcher process so the MLS browser session stays warm. Use `npm run watch:mls` when you want one persistent FlexMLS instance instead of repeated fresh logins.
 
 If FlexMLS blocks on a 2FA / trusted-device page, the system should behave like STR bot owns the interaction end to end. The persistent watcher detects the block, but user-facing Slack messages should be phrased in STR bot voice. The code handoff goes through `scripts/workflows/submit-mls-2fa.ts` and the local MLS command bridge so the persistent watcher can enter it. If a Slack reply is just a 4-8 digit code while the MLS watcher is awaiting 2FA, interpret it as an MLS 2FA submission.

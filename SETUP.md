@@ -72,6 +72,12 @@ cp .env.example .env
 ```
 
 Operationally relevant tuning:
+- `FLEXMLS_SCAN_ENABLED`
+  When `false`, the watcher stays running for Slack commands but never auto-scrapes the hot sheet. Default `true`.
+- `FLEXMLS_SCAN_WINDOW_START_HOUR` / `FLEXMLS_SCAN_WINDOW_END_HOUR`
+  Mountain Time window (DST-aware) during which the hot-sheet scan runs. Start inclusive, end exclusive. Defaults `7` and `19` (7:00am MT through 6:59:59pm MT). Outside the window the watcher still processes Slack commands and logs an `outside scan window` heartbeat each tick.
+- `FLEXMLS_WATCH_INTERVAL_SECONDS`
+  Seconds between scan attempts. Default `300` (5 minutes).
 - `ON_DEMAND_REQUEST_LEASE_MS`
   How long one workflow runner owns an on-demand request before another runner may reclaim it.
 - `ON_DEMAND_REQUEST_LEASE_POLL_MS`
