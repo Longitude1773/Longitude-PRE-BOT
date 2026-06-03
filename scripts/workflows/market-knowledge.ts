@@ -616,6 +616,19 @@ export const SUB_MARKET_KEYWORDS: Array<{ keywords: string[]; name: string; prom
   { keywords: ["kamas", "oakley", "mirror lake"], name: "Kamas/Oakley" },
 ];
 
+// Last-resort postal-city fallbacks. Deliberately kept OUT of SUB_MARKET_KEYWORDS
+// so they never match in pass 1 and overpower a real neighborhood signal — a bare
+// postal city ("Park City, UT" / "Heber City, UT") is present on almost every
+// listing regardless of actual sub-market. These are consulted ONLY in pass 2 of
+// inferSubMarket, after both strong description/area/subdivision signals AND the
+// distinctive city names in SUB_MARKET_KEYWORDS have failed, so a signal-less
+// listing uses its city as a representative proxy instead of dropping to the
+// Park City generic baseline.
+export const CITY_FALLBACK_SUB_MARKETS: Array<{ keywords: string[]; name: string; promontoryHint?: boolean }> = [
+  { keywords: ["park city"], name: "Old Town / Main St" },
+  { keywords: ["heber city", "heber"], name: "Jordanelle Ridge" },
+];
+
 const PRIMARY_AMENITY_ALIASES: Record<string, string[]> = {
   "Ski-in/ski-out access": ["ski-in/ski-out", "ski in/ski out", "ski in ski out", "ski-in ski-out", "skiin skiout"],
 };
@@ -672,6 +685,16 @@ export function inferSubMarket(input: ListingFacts, knowledge: MarketKnowledge):
   const cityCorpus = (input.city || "").toLowerCase();
   if (cityCorpus) {
     for (const entry of SUB_MARKET_KEYWORDS) {
+      if (entry.keywords.some((kw) => cityCorpus.includes(kw))) {
+        if (knowledge.subMarkets[entry.name]) {
+          return { name: entry.name, matched: true, promontoryHint: !!entry.promontoryHint };
+        }
+      }
+    }
+    // Pass 2b: bare postal-city fallback (e.g. "Park City" / "Heber City") — only
+    // reached when nothing more specific matched, so the city never overpowers a
+    // real signal but still beats the generic baseline.
+    for (const entry of CITY_FALLBACK_SUB_MARKETS) {
       if (entry.keywords.some((kw) => cityCorpus.includes(kw))) {
         if (knowledge.subMarkets[entry.name]) {
           return { name: entry.name, matched: true, promontoryHint: !!entry.promontoryHint };

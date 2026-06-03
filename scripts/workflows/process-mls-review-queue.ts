@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { appendSheetRows, readSheet } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
 import { inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
+import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
 
 type QueueItem = {
   mlsNumber: string;
@@ -286,10 +287,11 @@ async function processQueue() {
   const channel = argValue("--channel") || process.env.SLACK_CHANNEL_ID;
   if (!channel) throw new Error("Missing --channel or SLACK_CHANNEL_ID.");
 
-  const [items, adrBands, existing] = await Promise.all([
+  const [items, adrBands, existing, knowledge] = await Promise.all([
     queueItems(),
     parseAdrBands(),
     existingMlsState(),
+    loadMarketKnowledge(),
   ]);
 
   const survivors: QueueItem[] = [];
@@ -440,6 +442,22 @@ async function processQueue() {
         low: buildScenario(baseAdr, baseOcc, 0.88, -0.12),
       };
 
+      // Classify the listing with the same engine the Zillow / on-demand paths
+      // use, so the Slack classification block renders sub-market, market, tier,
+      // and amenities instead of always falling back to the low-confidence
+      // "sub-market not recognized" warning. Projections still come from the
+      // region-based ADR bands above; this only populates the display fields.
+      const facts: ListingFacts = {
+        price,
+        squareFootage: item.squareFootage,
+        bedrooms: item.bedrooms,
+        area: item.area,
+        subdivision: item.subdivision,
+        address: item.address,
+        city,
+      };
+      const classification = classify(facts, knowledge);
+
       const evalData: EvalData = {
         address: listingData.address,
         mlsNumber: item.mlsNumber,
@@ -457,6 +475,14 @@ async function processQueue() {
         comparables: buildComparables(item, region, projections.medium),
         narrative: buildNarrative(item, region, propertyType, projections.medium.revenue),
         methodology: buildMethodology(region, tier),
+        region,
+        market: classification?.market || "",
+        subMarket: classification?.subMarket || "",
+        luxuryTier: classification?.luxuryTier || "",
+        tierConfidence: classification?.tierConfidence,
+        borderlineWith: classification?.borderlineWith,
+        amenities: classification?.amenities || { primary: [], secondary: [] },
+        confidence: classification ? "medium" : "low",
       };
       roundProjectionRevenue(evalData);
       const evalPath = inferEvalPath(item.mlsNumber);

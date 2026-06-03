@@ -267,15 +267,18 @@ test("inferSubMarket matches keywords against the real knowledge", async () => {
   const kamas = inferSubMarket({ city: "Kamas" }, k);
   assert.equal(kamas.name, "Kamas/Oakley");
 
-  // Park City postal city with no neighborhood signal → no match (caller falls
-  // back to PC generic with low confidence). The bare "Park City" catch-all
-  // was removed to stop misclassifying everything as Old Town.
+  // Park City postal city with no neighborhood signal → last-resort city fallback
+  // (pass 2b) maps it to a representative sub-market rather than the generic
+  // baseline. The bare "Park City" entry lives in CITY_FALLBACK_SUB_MARKETS, not
+  // SUB_MARKET_KEYWORDS, so it only fires when nothing stronger matched.
   const pcNoSignal = inferSubMarket({ city: "Park City", description: "Cozy mountain home" }, k);
-  assert.equal(pcNoSignal.matched, false);
+  assert.equal(pcNoSignal.name, "Old Town / Main St");
+  assert.equal(pcNoSignal.matched, true);
 
-  // Heber City postal city with no neighborhood signal → no match.
+  // Heber City postal city with no neighborhood signal → city fallback.
   const heberNoSignal = inferSubMarket({ city: "Heber City", description: "Updated 3 bed home" }, k);
-  assert.equal(heberNoSignal.matched, false);
+  assert.equal(heberNoSignal.name, "Jordanelle Ridge");
+  assert.equal(heberNoSignal.matched, true);
 
   // Park City postal with a strong description signal → use the signal.
   const pcPine = inferSubMarket({ city: "Park City", description: "Beautiful Pinebrook townhome" }, k);
