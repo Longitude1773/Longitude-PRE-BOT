@@ -27,7 +27,7 @@ const zillowBrowserRunSessionFile = resolve(inboxDir, "zillow-browser-run-sessio
 const baseUrl = process.env.FLEXMLS_URL;
 const username = process.env.FLEXMLS_USERNAME;
 const password = process.env.FLEXMLS_PASSWORD;
-const intervalSeconds = Number(process.env.FLEXMLS_WATCH_INTERVAL_SECONDS || "300");
+const intervalSeconds = Number(process.env.FLEXMLS_WATCH_INTERVAL_SECONDS || "1800");
 const headless = (process.env.FLEXMLS_HEADLESS || "false").toLowerCase() === "true";
 const scanEnabled = (process.env.FLEXMLS_SCAN_ENABLED || "true").toLowerCase() !== "false";
 const scanWindowStartHour = Number(process.env.FLEXMLS_SCAN_WINDOW_START_HOUR || "7");
