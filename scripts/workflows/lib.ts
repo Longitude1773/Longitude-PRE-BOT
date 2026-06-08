@@ -390,6 +390,22 @@ export async function resolveListingUrl(data: EvalData) {
   return listing ? asString(listing.data.listingUrl) : "";
 }
 
+export function buildListingAgentBlock(listing: { data: Record<string, unknown> } | null): string[] {
+  const name = asString(listing?.data.listingAgentName).trim();
+  if (!name) return [];
+  const email = asString(listing?.data.listingAgentEmail).trim();
+  const phone = asString(listing?.data.listingAgentPhone).trim();
+  const brokerage = asString(listing?.data.listingBrokerage).trim();
+  const contact = [
+    name,
+    email || "email not available — check listing manually",
+    phone, // omitted when empty
+  ].filter(Boolean).join(" • ");
+  const lines = [`👤 Listing Agent: ${contact}`];
+  if (brokerage) lines.push(`   Brokerage: ${brokerage}`);
+  return lines;
+}
+
 export function buildClassificationBlock(data: EvalData): string[] {
   const subMarket = asString(data.subMarket);
   const market = asString(data.market);
@@ -469,6 +485,8 @@ export async function buildReviewMessage(data: EvalData) {
     `• Conservative: ${fmtCurrency(data.projections!.low.revenue)}/yr (${fmtPct(data.projections!.low.occupancy)} occ, ${fmtCurrency(data.projections!.low.adr)} ADR)`,
     "",
     comparableLine,
+    "",
+    ...buildListingAgentBlock(listing),
     "",
     "💬 Reply to adjust projections OR correct the tier / market / amenity assessment.",
     "Say *approve* when projections look right and I'll generate the PDF.",

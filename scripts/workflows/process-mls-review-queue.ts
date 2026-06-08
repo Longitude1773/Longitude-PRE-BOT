@@ -28,6 +28,10 @@ type QueueItem = {
   squareFootage?: number;
   photoUrls?: string[];
   openHouses?: Array<{ date: string; time: string; hostedBy: string }>;
+  listingAgentName?: string;
+  listingAgentEmail?: string;
+  listingAgentPhone?: string;
+  listingBrokerage?: string;
   detectedAt?: string;
 };
 
@@ -379,7 +383,11 @@ async function processQueue() {
         strEligible: pipelineDisposition === "ready_for_review" ? "Yes" : pipelineDisposition === "hold_missing_str_approval" ? "" : "No",
         status: "Active",
         listingDate: item.detectedAt ? item.detectedAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
-        agent: "",
+        agent: item.listingAgentName || "",
+        listingAgentName: item.listingAgentName || "",
+        listingAgentEmail: item.listingAgentEmail || "",
+        listingAgentPhone: item.listingAgentPhone || "",
+        listingBrokerage: item.listingBrokerage || "",
         photos: downloadedPhotos.length > 0 ? downloadedPhotos : item.photoUrls || [],
       };
 

@@ -548,6 +548,12 @@ type HotSheetListing = {
   nightlyRentalAllowedSource?: string;
   strApproved?: boolean;
   approvalMhtmlPath?: string;
+  listingAgentName?: string;
+  listingAgentEmail?: string;
+  listingAgentPhone?: string;
+  listingBrokerage?: string;
+  listingAgentMemberId?: string;
+  listingRecordTechId?: string;
 };
 
 type ExtractedHotSheet = {
@@ -590,6 +596,10 @@ type QueueCandidate = {
   squareFootage?: number;
   photoUrls?: string[];
   openHouses?: OpenHouseEntry[];
+  listingAgentName?: string;
+  listingAgentEmail?: string;
+  listingAgentPhone?: string;
+  listingBrokerage?: string;
   detectedAt: string;
   nextStep: string;
   slackStatus: string;
@@ -1935,6 +1945,63 @@ async function resolveNightlyRentalAllowed(page: Page, listings: HotSheetListing
   return { listings: next, attempts };
 }
 
+// Best-effort agent email/phone via the FlexMLS business-card popup. Name and
+// brokerage already come from the hot-sheet row; this fills the two fields that
+// only exist behind showBusinessCard() (AJAX-injected into #buscardinnerds).
+// The popup's internal markup is unverified offline, so this degrades quietly:
+// any miss leaves email/phone empty and the Slack block falls back gracefully.
+async function resolveAgentContacts(surface: FlexSurface, listings: HotSheetListing[]) {
+  const targets = listings.filter(
+    (listing) => listing.strApproved === true && listing.listingAgentMemberId,
+  );
+  for (const listing of targets) {
+    try {
+      const card = await surface.evaluate(async ({ memberId, listingTechId }) => {
+        const w = window as unknown as {
+          selectL?: (id: string, flag: boolean) => void;
+          showBusinessCard?: (id: string, event: unknown) => void;
+        };
+        const clear = document.getElementById("buscardinnerds");
+        if (clear) clear.innerHTML = "";
+        try {
+          if (listingTechId && typeof w.selectL === "function") w.selectL(listingTechId, false);
+          if (typeof w.showBusinessCard === "function") w.showBusinessCard(memberId, { cancelBubble: true });
+        } catch {
+          /* showBusinessCard signature is best-effort; ignore and read whatever rendered */
+        }
+        const started = Date.now();
+        while (Date.now() - started < 3500) {
+          const el = document.getElementById("buscardinnerds");
+          const text = (el?.textContent || "").replace(/\s+/g, " ").trim();
+          if (text && /(@|\d{3})/.test(text)) {
+            return { text, html: el?.innerHTML || "" };
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        const el = document.getElementById("buscardinnerds");
+        return { text: (el?.textContent || "").replace(/\s+/g, " ").trim(), html: el?.innerHTML || "" };
+      }, { memberId: listing.listingAgentMemberId || "", listingTechId: listing.listingRecordTechId || "" }).catch(() => ({ text: "", html: "" }));
+
+      const email = (
+        card.html.match(/mailto:([^"'<>\s]+@[^"'<>\s]+)/i)?.[1] ||
+        card.text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)?.[0] ||
+        ""
+      ).trim();
+      const phone = (card.text.match(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]\d{4}/)?.[0] || "").trim();
+      if (email) listing.listingAgentEmail = email;
+      if (phone) listing.listingAgentPhone = phone;
+      await logLine(
+        `mls watcher: agent card mls=${listing.mlsNumber} member=${listing.listingAgentMemberId} email=${email || "none"} phone=${phone || "none"}`,
+      );
+    } catch (error) {
+      await logLine(
+        `mls watcher: agent card failed mls=${listing.mlsNumber} error=${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return listings;
+}
+
 async function resolveListingUrlFromHotSheetRow(page: Page, listing: HotSheetListing, hadRowLink = false): Promise<LinkResolutionAttempt> {
   const attempt: LinkResolutionAttempt = {
     mlsNumber: listing.mlsNumber,
@@ -2471,6 +2538,33 @@ async function extractHotSheetListings(surface: FlexSurface): Promise<ExtractedH
         continue;
       }
 
+      // "Listing Member" column: ordered columnlinks are agent, brokerage, co-agent, co-office.
+      // We take the first agent + first brokerage; the agent's member tech id (from the
+      // showBusinessCard('<id>') onclick) lets us fetch email/phone from the business card popup.
+      let listingAgentName = "";
+      let listingBrokerage = "";
+      let listingAgentMemberId = "";
+      let listingRecordTechId = "";
+      const memberCell = row.querySelector(".column_me_tech_id");
+      if (memberCell) {
+        const links = Array.from(memberCell.querySelectorAll("a.columnlink, a"))
+          .map((anchor) => ({
+            text: (anchor.textContent || "").replace(/\s+/g, " ").trim(),
+            onclick: anchor.getAttribute("onclick") || "",
+          }))
+          .filter((entry) => entry.text);
+        if (links[0]) {
+          listingAgentName = links[0].text;
+          listingAgentMemberId = (links[0].onclick.match(/showBusinessCard\('([^']+)'/) || [])[1] || "";
+          listingRecordTechId = (links[0].onclick.match(/selectL\('([^']+)'/) || [])[1] || "";
+        }
+        if (links[1]) {
+          let brokerage = links[1].text;
+          while (/\s*\([^)]*\)\s*$/.test(brokerage)) brokerage = brokerage.replace(/\s*\([^)]*\)\s*$/, "");
+          listingBrokerage = brokerage.trim() || links[1].text;
+        }
+      }
+
       results.push({
         mlsNumber,
         priceText,
@@ -2493,6 +2587,10 @@ async function extractHotSheetListings(surface: FlexSurface): Promise<ExtractedH
         bathrooms,
         squareFootage,
         photoUrls: photoUrl ? [photoUrl] : [],
+        listingAgentName,
+        listingBrokerage,
+        listingAgentMemberId,
+        listingRecordTechId,
       });
     }
 
@@ -2545,6 +2643,10 @@ async function persistCandidateSkeletons(candidates: HotSheetListing[]) {
     squareFootage: candidate.squareFootage,
     photoUrls: candidate.photoUrls || [],
     openHouses: candidate.openHouses || [],
+    listingAgentName: candidate.listingAgentName,
+    listingAgentEmail: candidate.listingAgentEmail,
+    listingAgentPhone: candidate.listingAgentPhone,
+    listingBrokerage: candidate.listingBrokerage,
     detectedAt,
     nextStep: "generate_revenue_evaluation",
     slackStatus: "hold_until_evaluation_ready",
@@ -2773,6 +2875,11 @@ async function scanOnce(page: Page) {
       `${JSON.stringify({ updatedAt: new Date().toISOString(), unresolvedMls: [] }, null, 2)}\n`
     );
   }
+
+  // Fill agent email/phone for the listings we'll actually post (name + brokerage
+  // are already on the row from extraction). Runs on the still-loaded hot-sheet
+  // surface where showBusinessCard() is defined. Best-effort — never blocks the scan.
+  await resolveAgentContacts(activeForListings, eligibility.listings).catch(() => eligibility.listings);
 
   const persistStartedAt = Date.now();
   const queueState = await persistCandidateSkeletons(eligibility.listings);
