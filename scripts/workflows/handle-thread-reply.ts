@@ -9,6 +9,7 @@ import {
   cloneEvalData,
   logSlackEvent,
   parseAdjustmentRequest,
+  pdfPathForEval,
   resolveEvaluationByMls,
   resolveEvaluationByThread,
   saveEvalData,
@@ -161,7 +162,7 @@ async function main() {
         version: String(nextVersion),
         status: "pending_review",
         "slack-ts": targetThreadTs,
-        "pdf-path": asString(row["PDF Path"] || `data/pdfs/${data.mlsNumber}.pdf`),
+        "pdf-path": asString(row["PDF Path"]) || pdfPathForEval(data),
       });
       await upsertAdjustmentForMls({
         evalId: asString(row["Eval ID"]),

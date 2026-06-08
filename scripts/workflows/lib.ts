@@ -125,6 +125,22 @@ export function inferListingPath(mlsNumber: string | number) {
   return resolve(repoRoot, `data/listing-${String(mlsNumber)}.json`);
 }
 
+// Slugify the street portion of an address (everything before the city — i.e.
+// the first comma-delimited segment: house number, street name, and unit if
+// present) into a filesystem/Slack-safe filename stem. Falls back to the
+// provided id (MLS#/ZPID) when no usable street is available.
+export function pdfBaseName(address: unknown, fallbackId: string | number | undefined = "") {
+  const street = String(address ?? "").split(",")[0]?.trim() ?? "";
+  const slug = street.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || String(fallbackId ?? "").trim() || "evaluation";
+}
+
+// Canonical PDF path for an evaluation, named after the listing's street
+// address so the generated file and Slack attachment match the property.
+export function pdfPathForEval(data: { address?: unknown; mlsNumber?: string | number }) {
+  return `data/pdfs/${pdfBaseName(data.address, data.mlsNumber)}.pdf`;
+}
+
 function normalizeThreadTs(threadTs: string) {
   return threadTs.replace(/[^0-9A-Za-z._-]/g, "_");
 }

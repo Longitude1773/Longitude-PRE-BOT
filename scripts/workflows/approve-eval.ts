@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { asString, resolveEvaluationByThread, resolveEvaluationByMls, updateEvaluationSummaryRow, upsertThreadContext } from "./lib.ts";
+import { asString, pdfPathForEval, resolveEvaluationByThread, resolveEvaluationByMls, updateEvaluationSummaryRow, upsertThreadContext } from "./lib.ts";
 import { upload } from "../slack.ts";
 
 function argValue(flag: string) {
@@ -23,7 +23,10 @@ async function main() {
   if (!resolved) throw new Error("Evaluation not found.");
 
   const { row, path, data } = resolved;
-  const pdfPath = asString(row["PDF Path"]) || `data/pdfs/${data.mlsNumber}.pdf`;
+  // Name the PDF after the street address (house number, street, unit) rather
+  // than the MLS#/ZPID. Recomputed here so the generated file + Slack upload
+  // always match the address even if an older row stored an id-based path.
+  const pdfPath = pdfPathForEval(data);
   const targetThreadTs = threadTs || asString(row["Slack Timestamp"]);
 
   if (!dryRun) {

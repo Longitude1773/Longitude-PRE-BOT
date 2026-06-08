@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { appendSheetRows, readSheet } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
-import { inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
+import { inferEvalPath, pdfPathForEval, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
 
 type QueueItem = {
@@ -495,7 +495,7 @@ async function processQueue() {
             source: "new_listing",
             status: "pending_review",
             version: "1",
-            "pdf-path": `data/pdfs/${item.mlsNumber}.pdf`,
+            "pdf-path": pdfPathForEval(evalData),
           },
         });
       }
