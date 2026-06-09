@@ -60,3 +60,37 @@ test("treats lower-to requests as absolute targets instead of generic 10 percent
   assert.deepEqual(parsed.spec.scenarios, ["medium"]);
   assert.equal(parsed.spec.value, 90000);
 });
+
+test("locks scenario spread when balanced revenue is set", () => {
+  const parsed = parseAdjustmentRequest("balanced should be 250000");
+  assert.equal(parsed.kind, "ok");
+  if (parsed.kind !== "ok") return;
+
+  assert.equal(parsed.spec.mode, "set");
+  assert.equal(parsed.spec.field, "revenue");
+  assert.deepEqual(parsed.spec.scenarios, ["medium"]);
+  assert.equal(parsed.spec.value, 250000);
+
+  const data = buildEvalData();
+  applyStructuredAdjustment(data, parsed.spec);
+  assert.equal(data.projections?.medium.revenue, 250000);
+  assert.equal(data.projections?.high.revenue, 337500); // × 1.35
+  assert.equal(data.projections?.low.revenue, 187500); // × 0.75
+});
+
+test("ignores embedded spread percentages on a balanced revenue set", () => {
+  const parsed = parseAdjustmentRequest(
+    "adjust the balanced revenue to be 235500 and set the optimized 35% up and the conservative 25% down from 235500",
+  );
+  assert.equal(parsed.kind, "ok");
+  if (parsed.kind !== "ok") return;
+
+  assert.deepEqual(parsed.spec.scenarios, ["medium"]);
+  assert.equal(parsed.spec.value, 235500);
+
+  const data = buildEvalData();
+  applyStructuredAdjustment(data, parsed.spec);
+  assert.equal(data.projections?.medium.revenue, 235500);
+  assert.equal(data.projections?.high.revenue, 317925); // 235500 × 1.35
+  assert.equal(data.projections?.low.revenue, 176625); // 235500 × 0.75
+});

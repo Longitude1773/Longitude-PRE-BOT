@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { appendSheetRows, readSheet } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
-import { inferEvalPath, pdfPathForEval, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
+import { deriveSpreadScenarios, inferEvalPath, pdfPathForEval, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
 
 type QueueItem = {
@@ -249,7 +249,7 @@ function buildNarrative(item: QueueItem, region: string, propertyType: string, m
 }
 
 function buildMethodology(region: string, tier: string) {
-  return `Projections generated from data/market-knowledge.md using the ${region} ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. ${tier === "premium" || tier === "luxury" ? "A premium-tier pricing assumption was used based on price point and positioning. " : "A standard-tier pricing assumption was used. "}High reflects stronger execution, medium reflects the working median case, and low includes a new-listing ramp penalty.`;
+  return `Projections generated from data/market-knowledge.md using the ${region} ADR band, bedroom multiplier, Park City seasonality, and the standard review workflow. ${tier === "premium" || tier === "luxury" ? "A premium-tier pricing assumption was used based on price point and positioning. " : "A standard-tier pricing assumption was used. "}Scenarios are locked to the Balanced case: Optimized = Balanced revenue × 1.35 and Conservative = Balanced revenue × 0.75, with ADR and occupancy split out of each revenue target.`;
 }
 
 async function queueItems() {
@@ -444,11 +444,7 @@ async function processQueue() {
       if (tier === "luxury") baseOcc += 0.05;
       baseOcc = clamp(baseOcc, 0.42, 0.72);
 
-      const projections = {
-        high: buildScenario(baseAdr, baseOcc, 1.12, 0.1),
-        medium: buildScenario(baseAdr, baseOcc, 1, 0),
-        low: buildScenario(baseAdr, baseOcc, 0.88, -0.12),
-      };
+      const projections = deriveSpreadScenarios(buildScenario(baseAdr, baseOcc, 1, 0));
 
       // Classify the listing with the same engine the Zillow / on-demand paths
       // use, so the Slack classification block renders sub-market, market, tier,

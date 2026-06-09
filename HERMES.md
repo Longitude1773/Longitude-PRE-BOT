@@ -125,6 +125,7 @@ Then handle based on content:
 
 - **Projection adjustment** (e.g. "bump numbers down", "ADR too high", "finishes are premium"):
   Run the thread-reply workflow with the user message.
+  The scenario spread is locked in code (`SCENARIO_SPREAD` in `scripts/workflows/lib.ts`): a Balanced revenue set (e.g. "balanced should be $235,500") automatically re-derives Optimized = Balanced × 1.35 and Conservative = Balanced × 0.75, ignoring any per-scenario percentages in the message. Never ask the user to specify scenario spreads.
 
 - **Photo/image adjustment** (e.g. "use photo 3", "zoom in more"):
   1. Log to Adjustments sheet with category `hero-photo` or `photo-framing`

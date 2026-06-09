@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { appendSheetRow, appendSheetRows, findSheetRows, readSheet, updateSheetRow } from "../sheets.ts";
-import { buildEvaluationRows, type EvalComparable, type EvalData } from "../write-sheet-data.ts";
+import { buildEvaluationRows, type EvalComparable, type EvalData, type EvalScenario } from "../write-sheet-data.ts";
 import { TIER_DISPLAY_NAME, type LuxuryTier } from "./market-knowledge.ts";
 
 export const repoRoot = resolve(import.meta.dirname, "../..");
@@ -654,6 +654,11 @@ export type AdjustmentScenarioKey = "high" | "medium" | "low";
 export type AdjustmentField = "adr" | "occupancy" | "revenue" | "numbers";
 export type AdjustmentMode = "scale" | "set" | "relative";
 
+// Locked scenario spread. Optimized and Conservative are always derived from
+// Balanced revenue by these multipliers — never set independently, never
+// specified per-request. Tune here if the spread ever needs to change.
+export const SCENARIO_SPREAD = { OPTIMIZED: 1.35, CONSERVATIVE: 0.75 } as const;
+
 export type AdjustmentConstraint = {
   scenarios: AdjustmentScenarioKey[];
   field: Exclude<AdjustmentField, "numbers">;
@@ -668,7 +673,6 @@ export type AdjustmentSpec = {
   value: number;
   constraints: AdjustmentConstraint[];
   anchorScenario?: AdjustmentScenarioKey;
-  propagateScaleTo?: AdjustmentScenarioKey[];
   category: AdjustmentCategory;
   summary: string;
 };
@@ -795,6 +799,21 @@ function parseMagnitudeNumber(rawValue: string, rawSuffix = "") {
   return numeric;
 }
 
+// Permissive match for an absolute *Balanced* revenue target. Fires before the
+// general absolute matcher so balanced-revenue sets always lock the spread and
+// any "optimized X% up / conservative Y% down" phrasing is ignored (structural).
+// Requires balanced/medium + a preposition OR a literal $ before the number, so
+// "balanced 25% down" (a scale) and relative phrasings don't get captured.
+function parseBalancedRevenueTarget(text: string): number | null {
+  const m = text.match(
+    /\b(?:balanced|medium)\b(?:\s+revenue)?[\s\S]{0,24}?(?:\b(?:to(?:\s+be)?|should\s+be|of|at)\b\s*\$?|=\s*\$?|\$)\s*([\d,]+(?:\.\d+)?)\s*([km])?/i,
+  );
+  if (!m) return null;
+  const value = parseMagnitudeNumber(m[1], m[2] || "");
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
 function parseAbsoluteMetricRequest(text: string): {
   field: Exclude<AdjustmentField, "numbers">;
   value: number;
@@ -918,8 +937,9 @@ function summarizeRelative(field: AdjustmentField, scenarios: AdjustmentScenario
 
 export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
   const lower = text.toLowerCase();
+  const balancedTarget = parseBalancedRevenueTarget(text);
 
-  if (!isAdjustmentLike(text) && !lower.includes("premium finish") && !lower.includes("premium finishes") && !lower.includes("higher tier") && !lower.includes("luxury finish")) {
+  if (balancedTarget === null && !isAdjustmentLike(text) && !lower.includes("premium finish") && !lower.includes("premium finishes") && !lower.includes("higher tier") && !lower.includes("luxury finish")) {
     return { kind: "none" };
   }
 
@@ -934,6 +954,25 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
         constraints: [],
         category: "general-direction",
         summary: "Applied a premium-finish uplift to all scenarios' ADR and linked revenue while leaving occupancy unchanged.",
+      },
+    };
+  }
+
+  if (balancedTarget !== null) {
+    return {
+      kind: "ok",
+      spec: {
+        scenarios: ["medium"],
+        field: "revenue",
+        mode: "set",
+        value: balancedTarget,
+        constraints: [],
+        category: "revenue",
+        summary:
+          `Set Balanced revenue to ${fmtCurrency(balancedTarget)}; ` +
+          `Optimized auto-derived to ${fmtCurrency(Math.round(balancedTarget * SCENARIO_SPREAD.OPTIMIZED))} ` +
+          `(×${SCENARIO_SPREAD.OPTIMIZED}) and Conservative to ` +
+          `${fmtCurrency(Math.round(balancedTarget * SCENARIO_SPREAD.CONSERVATIVE))} (×${SCENARIO_SPREAD.CONSERVATIVE}).`,
       },
     };
   }
@@ -954,16 +993,7 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
   const constraints = constraintResult.constraints;
 
   if (absolute) {
-    const propagateScaleTo = absolute.field === "revenue" &&
-      scenarios.length === 1 &&
-      scenarios[0] === "medium" &&
-      /\boptimized\b[\s\S]*?\bconservative\b[\s\S]*?(?:from there|proportionally|from that baseline)/i.test(text)
-        ? ["high", "low"] as AdjustmentScenarioKey[]
-        : undefined;
-
-    const summary = propagateScaleTo
-      ? `Set Balanced revenue to ${fmtCurrency(absolute.value)} and rescaled Optimized and Conservative ADR/revenue proportionally while leaving occupancy unchanged.`
-      : summarizeSet(absolute.field, scenarios, absolute.value);
+    const summary = summarizeSet(absolute.field, scenarios, absolute.value);
 
     return {
       kind: "ok",
@@ -973,7 +1003,6 @@ export function parseAdjustmentRequest(text: string): AdjustmentParseResult {
         mode: "set",
         value: absolute.value,
         constraints,
-        propagateScaleTo,
         category: absolute.field,
         summary: appendConstraintSummary(summary, constraints),
       },
@@ -1026,6 +1055,40 @@ function projectionScenario(data: EvalData, scenario: AdjustmentScenarioKey) {
 
 function clampOccupancy(value: number) {
   return Math.max(0.05, Math.min(0.95, value));
+}
+
+// Derive one spread scenario from the balanced/medium case. Revenue is locked
+// to `multiplier × balanced`; the multiplier is split across ADR (^0.4) and
+// occupancy (^0.6) so neither swings alone, matching the historical generation
+// spread while pinning revenue exactly. The monthly series scales the same way.
+function spreadScenario(medium: EvalScenario, multiplier: number): EvalScenario {
+  const adrFactor = Math.pow(multiplier, 0.4);
+  const occFactor = multiplier / adrFactor; // adrFactor * occFactor === multiplier
+  return {
+    revenue: Math.round(medium.revenue * multiplier),
+    occupancy: Number(clampOccupancy(medium.occupancy * occFactor).toFixed(4)),
+    adr: Math.round(medium.adr * adrFactor),
+    monthly: medium.monthly.map((m) => ({
+      month: m.month,
+      revenue: Math.round(m.revenue * multiplier),
+      occupancy: Number(clampOccupancy(m.occupancy * occFactor).toFixed(4)),
+      adr: Math.round(m.adr * adrFactor),
+    })),
+  };
+}
+
+// Lock Optimized & Conservative to Balanced. Used at generation time and
+// whenever an adjustment changes Balanced revenue.
+export function deriveSpreadScenarios(medium: EvalScenario): {
+  high: EvalScenario;
+  medium: EvalScenario;
+  low: EvalScenario;
+} {
+  return {
+    high: spreadScenario(medium, SCENARIO_SPREAD.OPTIMIZED),
+    medium,
+    low: spreadScenario(medium, SCENARIO_SPREAD.CONSERVATIVE),
+  };
 }
 
 function scaleScenarioMetric(data: EvalData, scenarioKey: AdjustmentScenarioKey, field: AdjustmentField, factor: number) {
@@ -1120,16 +1183,6 @@ export function applyStructuredAdjustment(data: EvalData, spec: AdjustmentSpec) 
     }
   }
 
-  if (spec.propagateScaleTo && spec.scenarios.length === 1) {
-    const anchor = spec.scenarios[0];
-    const beforeScenario = projectionScenario(baseline, anchor);
-    const afterScenario = projectionScenario(data, anchor);
-    const factor = beforeScenario.revenue > 0 ? afterScenario.revenue / beforeScenario.revenue : 1;
-    for (const scenario of spec.propagateScaleTo) {
-      scaleScenarioMetric(data, scenario, "revenue", factor);
-    }
-  }
-
   for (const constraint of spec.constraints) {
     for (const scenario of constraint.scenarios) {
       setScenarioMetric(data, scenario, constraint.field, constraint.value);
@@ -1191,6 +1244,19 @@ export function applyStructuredAdjustment(data: EvalData, spec: AdjustmentSpec) 
         throw new Error(`Constraint validation failed for ${scenarioLabel(scenario)} revenue.`);
       }
     }
+  }
+
+  // Locked spread: any change to Balanced revenue re-derives Optimized &
+  // Conservative from SCENARIO_SPREAD. Absolute lock — a direct Optimized/
+  // Conservative edit holds only until the next Balanced change.
+  if (
+    data.projections &&
+    baseline.projections &&
+    data.projections.medium.revenue !== baseline.projections.medium.revenue
+  ) {
+    const relocked = deriveSpreadScenarios(data.projections.medium);
+    data.projections.high = relocked.high;
+    data.projections.low = relocked.low;
   }
 
   return { data, reasoning: spec.summary };

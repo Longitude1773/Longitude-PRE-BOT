@@ -136,10 +136,7 @@ YOU are the analysis engine. Given the comp data, generate projections:
 **Your analysis should consider:**
 - Park City seasonality: Ski season (Dec-Mar) is peak, summer (Jun-Aug) is secondary, shoulder seasons are low
 - Comparable properties: weight by proximity, bedroom count match, and property type
-- Optimized (high) scenario = 75th percentile of comps performance
-- Balanced (medium) scenario = 50th percentile (median)
-- Conservative (low) scenario = 25th percentile
-- New listing penalty: reduce year-1 occupancy by ~10-15% in low scenario
+- **Locked scenario spread**: You only underwrite the Balanced (medium) case. Optimized and Conservative are derived automatically and are structurally locked: `Optimized revenue = Balanced × 1.35`, `Conservative revenue = Balanced × 0.75`. ADR and occupancy are split out of each scenario's revenue target. This is enforced in code (`SCENARIO_SPREAD` in `scripts/workflows/lib.ts`) at generation time and on every adjustment. **Never ask the user to specify scenario spreads, and never set Optimized or Conservative independently** — set Balanced and the rest follow.
 - **Market knowledge**: Read `data/market-knowledge.md` for ADR ranges by area/tier, seasonality multipliers, bedroom count adjustments, and premium feature bumps. Use these as the basis for projections when API data is unavailable.
 - **Past adjustments**: Before generating projections, read the Adjustments sheet (`tsx scripts/sheets.ts read "Adjustments"`) to learn from prior feedback. Look for patterns by category (e.g. if premium-finish properties in Deer Valley consistently get bumped 15%, apply that upfront). This makes initial estimates more accurate over time and reduces review cycles.
 

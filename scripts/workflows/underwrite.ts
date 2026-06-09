@@ -1,5 +1,5 @@
 import type { EvalData, EvalGroundingSource } from "../write-sheet-data.ts";
-import { roundProjectionRevenue } from "./lib.ts";
+import { deriveSpreadScenarios, roundProjectionRevenue } from "./lib.ts";
 import {
   classify,
   loadMarketKnowledge,
@@ -273,7 +273,7 @@ function buildSupportedMethodology(
 
   // Scenario derivation
   lines.push(
-    "Scenarios: Optimized = balanced ADR × 1.12 and occupancy + 10pp; Conservative = balanced ADR × 0.88 and occupancy − 12pp (including new-listing ramp penalty).",
+    "Scenarios are locked to the Balanced case: Optimized = Balanced revenue × 1.35, Conservative = Balanced revenue × 0.75, with ADR and occupancy split out of each revenue target.",
   );
 
   return lines.join("\n");
@@ -417,11 +417,7 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
 
   if (classification) {
     const projection = projectMedium(input.bedrooms || 2, knowledge, classification);
-    projections = {
-      high: buildScenario(projection.adr, projection.occupancy, 1.12, 0.10),
-      medium: buildScenario(projection.adr, projection.occupancy, 1.00, 0.00),
-      low: buildScenario(projection.adr, projection.occupancy, 0.88, -0.12),
-    };
+    projections = deriveSpreadScenarios(buildScenario(projection.adr, projection.occupancy, 1.00, 0.00));
     comparables = buildComparables(input, classification.subMarket, projections.medium);
     narrative = buildSupportedNarrative(input, classification.subMarket, propertyType, projections.medium.revenue);
     methodology = buildSupportedMethodology(knowledge, classification, projection, input);
@@ -434,11 +430,7 @@ export async function buildUnderwriteBundle(input: UnderwriteInput) {
     baseOcc = clamp(baseOcc, 0.35, 0.72);
     const baseAdr = round(mediumRevenue / (365 * baseOcc || 1));
 
-    projections = {
-      high: buildScenario(baseAdr, baseOcc, 1.14, 0.08),
-      medium: buildScenario(baseAdr, baseOcc, 1, 0),
-      low: buildScenario(baseAdr, baseOcc, 0.84, -0.12),
-    };
+    projections = deriveSpreadScenarios(buildScenario(baseAdr, baseOcc, 1, 0));
     comparables = [];
     narrative = buildFallbackNarrative(input, propertyType, projections.medium.revenue, strApproved);
     methodology = buildFallbackMethodology(input, propertyType, baseOcc);
