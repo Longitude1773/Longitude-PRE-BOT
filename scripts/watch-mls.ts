@@ -5,6 +5,7 @@ import { type BrowserContext, type Frame, type Page } from "playwright";
 import { getBrowserBackend, launchConfiguredPersistentContext, listBrowserRunTargets, type ManagedBrowserContext } from "./browser-runtime.ts";
 import { markOnDemandRequestForCommand } from "./workflows/on-demand-request-store.ts";
 import { isFlexMlsUrl, type OnDemandListingScrape } from "./workflows/on-demand-listing.ts";
+import { permalinkMatchesAddress } from "./permalink-url.ts";
 import { extractZillowListingFromPage, extractZpid, isZillowBlocked } from "./workflows/zillow.ts";
 
 const repoRoot = resolve(import.meta.dirname, "..");
@@ -1288,7 +1289,7 @@ async function searchListingUrlFromCurrentSurface(surface: FlexSurface, mlsNumbe
   return typeof result === "string" ? result : "";
 }
 
-async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "") {
+async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "", expectedAddress = "") {
   const shareDropdown = page.locator("#share-listings-dropdown").first();
   const shareButton = page
     .locator('#share-listings-dropdown .dropdown-trigger, #share-listings-dropdown a[title="Share listing(s)"], button:has-text("Share"), a:has-text("Share"), [role="button"]:has-text("Share")')
@@ -1300,6 +1301,12 @@ async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "") {
     await shareButton.click({ force: true }).catch(() => {});
   }
   await page.waitForTimeout(500);
+
+  // The share/permalink modal is a page-level singleton: #permalinkinput keeps
+  // the PREVIOUS listing's URL. Clear it before regenerating so a stale value
+  // can never be read for the current listing.
+  const permalinkInput = page.locator("#permalinkinput").first();
+  await permalinkInput.evaluate((el) => { (el as HTMLInputElement).value = ""; }).catch(() => {});
 
   const permalinkOption = page
     .locator('#share-listings-dropdown .dropdown-menu li a')
@@ -1316,50 +1323,41 @@ async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "") {
   });
   await page.waitForTimeout(700);
 
-  const permalinkInput = page.locator("#permalinkinput").first();
   const permalinkRow = page.locator("#permalinkrow").first();
   await permalinkRow.waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
   await permalinkInput.waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
 
-  const inputCandidates = [
+  // Only trust the specific permalink field / link. The previous broad fallbacks
+  // (any `.modal`/`[role=dialog]`/first `input[type=text]`, plus a page-wide
+  // body regex) could latch onto an unrelated or stale URL.
+  const candidates: string[] = [];
+  for (const locator of [
     permalinkInput,
     page.locator('input[value*="flexmls.com/share/"]').first(),
-    page.locator('input[value*="flexmls.com/share"]').first(),
-    page.locator('.modal input[type="text"]').first(),
-    page.locator('[role="dialog"] input[type="text"]').first(),
-    page.locator('input[type="text"]').first(),
-  ];
-
-  for (const candidate of inputCandidates) {
-    if (!(await candidate.isVisible().catch(() => false))) continue;
-    const value = await candidate.inputValue().catch(async () => {
-      return await candidate.evaluate((el) => (el as HTMLInputElement).value || "").catch(() => "");
-    });
-    const normalized = value.trim();
-    if (normalized.includes("flexmls.com/share/")) {
-      if (stopAfterPermalink) {
-        const mhtmlPath = await exportPageMhtml(page, `${mlsNumber || "unknown"}-permalink-open`).catch(() => "");
-        await saveState({
-          mode: "paused_permalink",
-          loggedIn: await looksLoggedIn(page),
-          url: page.url(),
-          reason: "FLEXMLS_STOP_AFTER_PERMALINK enabled",
-          mlsNumber,
-          permalink: normalized,
-          mhtmlPath,
-        });
-        if (mhtmlPath) {
-          await logLine(`mls watcher: saved permalink-open MHTML to ${mhtmlPath}`);
-        }
-        throw new Error(`Stopped at permalink for MLS ${mlsNumber || "unknown"}.`);
-      }
-      return normalized;
-    }
+  ]) {
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    const value = await locator.inputValue().catch(async () =>
+      await locator.evaluate((el) => (el as HTMLInputElement).value || "").catch(() => ""),
+    );
+    if (value) candidates.push(value.trim());
   }
-
   const permalinkHref = await page.locator("#permalinklink").getAttribute("href").catch(() => "");
-  if (permalinkHref && permalinkHref.includes("flexmls.com/share/")) {
-    const normalizedHref = permalinkHref.trim();
+  if (permalinkHref) candidates.push(permalinkHref.trim());
+
+  for (const candidate of candidates) {
+    if (!candidate.includes("flexmls.com/share/")) continue;
+
+    // Guard against the stale-singleton bug: the share URL embeds the address
+    // slug, so reject any permalink whose street number doesn't match this
+    // listing. A missing link is recoverable via healing; a wrong link silently
+    // mislabels the eval.
+    if (expectedAddress && !permalinkMatchesAddress(candidate, expectedAddress)) {
+      await logLine(
+        `mls watcher: rejected mismatched permalink mls=${mlsNumber || "unknown"} expected="${expectedAddress}" got=${candidate}`,
+      );
+      continue;
+    }
+
     if (stopAfterPermalink) {
       const mhtmlPath = await exportPageMhtml(page, `${mlsNumber || "unknown"}-permalink-open`).catch(() => "");
       await saveState({
@@ -1368,7 +1366,7 @@ async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "") {
         url: page.url(),
         reason: "FLEXMLS_STOP_AFTER_PERMALINK enabled",
         mlsNumber,
-        permalink: normalizedHref,
+        permalink: candidate,
         mhtmlPath,
       });
       if (mhtmlPath) {
@@ -1376,12 +1374,10 @@ async function extractPermalinkFromShareMenu(page: Page, mlsNumber = "") {
       }
       throw new Error(`Stopped at permalink for MLS ${mlsNumber || "unknown"}.`);
     }
-    return normalizedHref;
+    return candidate;
   }
 
-  const body = await page.locator("body").innerText().catch(() => "");
-  const match = body.match(/https?:\/\/(?:www\.)?flexmls\.com\/share\/[A-Za-z0-9_-]+/i);
-  return match ? match[0] : "";
+  return "";
 }
 
 function collapseWhitespace(value: string) {
@@ -2106,7 +2102,7 @@ async function resolveListingUrlFromHotSheetRow(page: Page, listing: HotSheetLis
           await popup.waitForLoadState("domcontentloaded").catch(() => {});
           await popup.waitForTimeout(1500);
           await exportNavigationHtml(popup, `listing-popup-${listing.mlsNumber}-${target.label}`);
-          const popupPermalink = await extractPermalinkFromShareMenu(popup, listing.mlsNumber);
+          const popupPermalink = await extractPermalinkFromShareMenu(popup, listing.mlsNumber, listing.address);
           if (popupPermalink) {
             attempt.finalUrl = popupPermalink;
             attempt.finalSource = "hotsheet_popup_permalink";
@@ -2132,7 +2128,7 @@ async function resolveListingUrlFromHotSheetRow(page: Page, listing: HotSheetLis
           .isVisible()
           .catch(() => false);
 
-        const permalink = await extractPermalinkFromShareMenu(warmPage, listing.mlsNumber);
+        const permalink = await extractPermalinkFromShareMenu(warmPage, listing.mlsNumber, listing.address);
         attempt.permalinkInputVisible = await warmPage.locator("#permalinkinput").first().isVisible().catch(() => false);
         if (permalink) {
           attempt.finalUrl = permalink;
