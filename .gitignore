@@ -10,6 +10,7 @@ flexmls-*.md
 data/eval-*.json
 data/listing-*.json
 data/migration/
+data/migrations/
 
 data/images/
 data/pdfs/
