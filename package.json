@@ -32,6 +32,7 @@
     "hermes:start": "bash scripts/hermes/start-gateway.sh"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1072.0",
     "@supabase/supabase-js": "^2.102.1",
     "playwright": "^1.50.0"
   },

@@ -9,7 +9,6 @@ import {
   inferEvalPath,
   inferListingPath,
   logSlackEvent,
-  pdfPathForEval,
   readPostedReviewRecord,
   repoRoot,
   resolveEvaluationByMls,
@@ -171,7 +170,6 @@ async function main() {
         source: scraped.listingSource,
         status: "pending_review",
         version: "1",
-        "pdf-path": pdfPathForEval(underwrite.evalData),
       });
       createdEvalId = asString(rows.evalId);
       createdVersion = 1;

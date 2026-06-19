@@ -141,6 +141,59 @@ export function pdfPathForEval(data: { address?: unknown; mlsNumber?: string | n
   return `data/pdfs/${pdfBaseName(data.address, data.mlsNumber)}.pdf`;
 }
 
+// --- R2 object keys -------------------------------------------------------
+// Distinct from pdfBaseName (which stays capitalized + street-only for local
+// filenames). R2 keys are LOWERCASE and use the FULL address, e.g.
+// "1583 Three Kings Drive, Park City, UT 84060" -> "1583-three-kings-drive-park-city-ut-84060".
+
+// Lowercase slug of the full address for use in R2 object keys.
+export function r2AddressSlug(address: unknown): string {
+  return String(address ?? "")
+    .toLowerCase()
+    .replace(/['’`",.#&/()]/g, "") // strip apostrophes/quotes, commas, periods, #, &, /, parens
+    .replace(/[^a-z0-9]+/g, "-") // any remaining non-alnum (incl. spaces) -> hyphen
+    .replace(/-+/g, "-") // collapse repeated hyphens
+    .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
+}
+
+// Fallback slug when no usable address is available: "zpid-<id>" for Zillow
+// evals (mls_number like "ZPID-123"), otherwise "mls-<id>".
+export function r2FallbackSlug(mlsNumber: string | number | undefined): string {
+  const s = String(mlsNumber ?? "").trim();
+  if (/^zpid-/i.test(s)) return `zpid-${s.replace(/^zpid-/i, "")}`.toLowerCase();
+  return s ? `mls-${s}`.toLowerCase() : "evaluation";
+}
+
+// The address slug, or the id-based fallback when the address yields nothing.
+export function r2KeySlug(address: unknown, mlsNumber?: string | number): string {
+  const slug = r2AddressSlug(address);
+  if (slug) return slug;
+  const fallback = r2FallbackSlug(mlsNumber);
+  if (fallback === "evaluation") {
+    console.warn(
+      `r2KeySlug: no address and no MLS#/ZPID available; falling back to "evaluation". ` +
+        `This will collide across properties — check the calling evaluation.`,
+    );
+  }
+  return fallback;
+}
+
+// year/month/day prefix derived from the eval's created_at (UTC date portion).
+export function r2DatePrefix(createdAt: string): string {
+  const m = String(createdAt).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) throw new Error(`Cannot derive R2 date prefix from createdAt: "${createdAt}"`);
+  return `${m[1]}/${m[2]}/${m[3]}`;
+}
+
+// Canonical R2 object key for an evaluation: {year}/{month}/{day}/{slug}.pdf
+export function r2KeyForEval(o: {
+  address?: unknown;
+  mlsNumber?: string | number;
+  createdAt: string;
+}): string {
+  return `${r2DatePrefix(o.createdAt)}/${r2KeySlug(o.address, o.mlsNumber)}.pdf`;
+}
+
 function normalizeThreadTs(threadTs: string) {
   return threadTs.replace(/[^0-9A-Za-z._-]/g, "_");
 }
@@ -493,7 +546,7 @@ export async function buildReviewMessage(data: EvalData) {
   ].filter(Boolean).join("\n");
 }
 
-export async function writeEvaluationVersion(data: EvalData, flags: Record<string, string | boolean>) {
+export async function writeEvaluationVersion(data: EvalData, flags: Record<string, string | boolean | undefined>) {
   roundProjectionRevenue(data);
   const rows = buildEvaluationRows(data, flags);
   await appendSheetRow("Evaluations", rows.evaluationRow);
@@ -502,7 +555,7 @@ export async function writeEvaluationVersion(data: EvalData, flags: Record<strin
   return rows;
 }
 
-export async function writeEvaluationVersionsBatch(entries: Array<{ data: EvalData; flags: Record<string, string | boolean> }>) {
+export async function writeEvaluationVersionsBatch(entries: Array<{ data: EvalData; flags: Record<string, string | boolean | undefined> }>) {
   for (const entry of entries) roundProjectionRevenue(entry.data);
   const rowSets = entries.map((entry) => buildEvaluationRows(entry.data, entry.flags));
   if (rowSets.length === 0) return rowSets;

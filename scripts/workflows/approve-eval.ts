@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 
-import { asString, pdfPathForEval, resolveEvaluationByThread, resolveEvaluationByMls, updateEvaluationSummaryRow, upsertThreadContext } from "./lib.ts";
+import { asString, pdfPathForEval, r2KeyForEval, resolveEvaluationByThread, resolveEvaluationByMls, updateEvaluationSummaryRow, upsertThreadContext } from "./lib.ts";
 import { upload } from "../slack.ts";
+import { uploadPdfToR2 } from "../r2.ts";
 
 function argValue(flag: string) {
   const index = process.argv.indexOf(flag);
@@ -40,9 +41,16 @@ async function main() {
     }
 
     await upload(channel, pdfPath, `Revenue Evaluation - ${data.address || data.mlsNumber}`, targetThreadTs);
+
+    // Upload the generated PDF to R2. The DB stores the R2 object key (not the
+    // local path); a populated pdf_path means "a downloadable PDF exists".
+    const createdAt = asString(row["Created At"]) || new Date().toISOString();
+    const r2Key = r2KeyForEval({ address: data.address, mlsNumber: data.mlsNumber, createdAt });
+    await uploadPdfToR2(r2Key, pdfPath);
+
     const nextRow = await updateEvaluationSummaryRow(row, {
       Status: "approved",
-      "PDF Path": pdfPath,
+      "PDF Path": r2Key,
     });
     if (targetThreadTs) {
       await upsertThreadContext({

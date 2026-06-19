@@ -204,7 +204,7 @@ export function buildListingRow(input: JsonObject, flags: Record<string, string 
   };
 }
 
-export function buildEvaluationRows(input: EvalData, flags: Record<string, string | boolean>) {
+export function buildEvaluationRows(input: EvalData, flags: Record<string, string | boolean | undefined>) {
   if (!input.mlsNumber || !input.projections) {
     throw new Error("Evaluation JSON must include mlsNumber and projections.");
   }
@@ -213,7 +213,10 @@ export function buildEvaluationRows(input: EvalData, flags: Record<string, strin
   const version = typeof flags.version === "string" ? Number(flags.version) : 1;
   const listingSource = String(flags.source || "new_listing");
   const createdAt = typeof flags["created-at"] === "string" ? flags["created-at"] : new Date().toISOString();
-  const pdfPath = typeof flags["pdf-path"] === "string" ? flags["pdf-path"] : `data/pdfs/${input.mlsNumber}.pdf`;
+  // pdf_path holds the R2 object key only once a PDF has been uploaded (at
+  // approval). Pending/draft rows leave it null — a null pdf_path is the
+  // "no downloadable PDF yet" signal. Only set it when explicitly provided.
+  const pdfPath = typeof flags["pdf-path"] === "string" ? flags["pdf-path"] : undefined;
   const slackTimestamp = typeof flags["slack-ts"] === "string" ? flags["slack-ts"] : "";
   const status = typeof flags.status === "string" ? flags.status : "draft";
 

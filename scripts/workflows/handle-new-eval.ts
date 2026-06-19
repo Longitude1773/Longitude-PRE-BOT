@@ -1,6 +1,5 @@
 import {
   loadEvalData,
-  pdfPathForEval,
   resolveEvaluationByMls,
   writeEvaluationVersion,
   asString,
@@ -48,7 +47,6 @@ async function main() {
         source,
         status: "pending_review",
         version: "1",
-        "pdf-path": pdfPathForEval(evalFile.data),
       });
       createdEvalId = asString(rows.evalId);
       createdVersion = 1;
