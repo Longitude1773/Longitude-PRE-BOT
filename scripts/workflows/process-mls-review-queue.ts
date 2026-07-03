@@ -6,6 +6,7 @@ import { appendSheetRows, readSheet } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
 import { deriveSpreadScenarios, inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
+import { uploadImageToR2 } from "../r2.ts";
 
 type QueueItem = {
   mlsNumber: string;
@@ -358,6 +359,19 @@ async function processQueue() {
           } catch {
             downloadedPhotos = [];
           }
+        }
+      }
+
+      // Mirror the hero photo to the PUBLIC R2 images bucket so the PRE Site can
+      // show it at img.longitude.network/<mls>/photo-0.jpg. Best-effort: an image
+      // upload failure must NEVER block PRE processing.
+      if (downloadedPhotos.length > 0) {
+        try {
+          await uploadImageToR2(`${item.mlsNumber}/photo-0.jpg`, downloadedPhotos[0]);
+        } catch (err) {
+          console.error(
+            `R2 image upload failed for ${item.mlsNumber}: ${err instanceof Error ? err.message : err}`,
+          );
         }
       }
 
