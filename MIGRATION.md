@@ -114,8 +114,26 @@ rsync -av ~/projects/Longitude-PRE-BOT/data/images \
           NEWMAC:~/projects/Longitude-PRE-BOT/data/
 ```
 
-> If `LLM_MODEL` is a Codex model (currently `openai/codex-5.4-medium`), also make
-> sure Codex auth exists on the new machine — typically `~/.codex/auth.json`.
+> **Codex model auth — read carefully, this is the #1 migration trap.**
+> `LLM_MODEL` is a Codex model (`openai/codex-5.4-medium`, `provider: openai-codex`),
+> so the model credential is a Codex login token, **not** an API key — there is no
+> `OPENAI_API_KEY` in `.env` by design. The loader looks for that token at
+> `~/.codex/auth.json` **first, then falls through to `~/.hermes/auth.json`.**
+>
+> On this deployment **`~/.codex` does not exist** — the live credential is
+> `~/.hermes/auth.json` (carried by rsync #3 above). So:
+> - **Do not** go hunting for `~/.codex/` or make a special trip for it. If it
+>   isn't on the source machine, it was never the source of truth.
+> - **Do not** set `HERMES_AUTH_FILE=~/.codex/auth.json` — pointing at a
+>   non-existent path makes the gateway fail to find a token even though the real
+>   one is present in `~/.hermes/`. Leave `HERMES_AUTH_FILE` unset (default
+>   fall-through finds it) or point it explicitly at `$HOME/.hermes/auth.json`.
+> - **Verify** `~/.hermes/auth.json` (~3.3 KB) landed on the new machine — that
+>   file *is* the model login.
+>
+> If a future deployment *does* keep its token at `~/.codex/auth.json`, copy that
+> folder too; the point is to bring whichever of the two actually exists on the
+> source machine, not to assume the default path.
 
 ## Step 4 — Clear stale runtime locks (on the NEW machine)
 
@@ -197,7 +215,8 @@ Everything below is gitignored and irreplaceable-if-lost:
 | `Longitude-PRE-BOT/.hermes.env` | Gateway config + paths + Slack app tokens | re-configure gateway |
 | `Longitude-PRE-BOT/.hermes-runtime/state.db` (+ `-shm`, `-wal`) | Agent sessions, memories, learned skills — 150+ MB | agent forgets everything |
 | `Longitude-PRE-BOT/.hermes-runtime/memories/`, `kanban.db`, `config.yaml`, `channel_directory.json` | Gateway working state | lose context/board |
-| `~/.hermes/auth.json`, `.env`, `config.yaml`, `SOUL.md` | Global Hermes auth + identity | re-auth Hermes |
+| `~/.hermes/auth.json`, `.env`, `config.yaml`, `SOUL.md` | Global Hermes auth + identity. **`auth.json` is also the Codex model login** (see Step 3 note) on deployments without `~/.codex` | re-auth Hermes + lose model access |
+| `~/.codex/` **only if it exists on the source machine** | Codex model login token (loader prefers this over `~/.hermes/auth.json`) | model can't authenticate |
 | `Longitude-PRE-BOT/data/images/`, `data/pdfs/` | Local artifact cache (regenerable) | re-download/regenerate |
 
 ### Path fixups (only if the username differs)
