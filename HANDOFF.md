@@ -11,20 +11,34 @@ Gateway + MLS watcher run detached and Slack-connected; an end-to-end test passe
 agent processed a "set balanced revenue" adjustment, applied the locked ×1.35/×0.75
 spread, and bumped the eval version).
 
-### How to run / check it
+### How it runs (launchd-managed)
+
+The stack is supervised by two **user LaunchAgents** (`~/Library/LaunchAgents/`):
+`com.longitude.pre-bot.gateway` and `com.longitude.pre-bot.watcher`. They start on
+login and `KeepAlive`-restart on crash. **Do not run `npm run str:start` anymore** — it
+would spawn a duplicate gateway (double-respond) and fight launchd.
 
 ```bash
-cd ~/projects/Longitude-PRE-BOT
-npm run str:start          # gateway + MLS watcher (both detached; safe to re-run)
-# npm run hermes:start     # gateway only
+# control
+launchctl list | grep longitude.pre-bot                          # status (PID + last exit)
+launchctl kickstart -k gui/501/com.longitude.pre-bot.gateway     # restart gateway
+launchctl kickstart -k gui/501/com.longitude.pre-bot.watcher     # restart watcher
+launchctl bootout   gui/501/com.longitude.pre-bot.gateway        # stop until next load/reboot
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.longitude.pre-bot.gateway.plist  # (re)load
 
 # health check
-pgrep -fl gateway.run; pgrep -fl watch-mls.ts
 python3 -c "import json;print(json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack']['state'])"
 tail -f /tmp/str-bot-gateway.log   # and /tmp/str-mls-watch.log
 ```
 
 Logs stream to `/tmp/str-bot-gateway.log` and `/tmp/str-mls-watch.log`.
+
+**Reboot persistence + FileVault:** FileVault is ON, so after a reboot/power-loss the
+encrypted disk stays locked until someone enters the FileVault password at the boot
+screen — no launchd job (agent or daemon) can run before that. Once entered, the user
+auto-logs-in and the agents start. Net: **crash recovery is fully automatic**; a
+**reboot needs one password entry**, then everything comes back. Zero-touch reboots would
+require disabling FileVault (not recommended on this credentialed machine).
 
 ## What this session did — machine migration (laptop `erik` → mini `erikmikkelsen`)
 
@@ -68,8 +82,10 @@ Everything below is done and verified:
 
 - [ ] **Commit `scripts/hermes/start-gateway.sh`** — the venv-PATH fix (currently
       uncommitted working-tree change).
-- [ ] **Reboot persistence** — install a launchd LaunchAgent (`hermes gateway install`);
-      the stack currently does not survive a reboot/logout.
+- [x] **Reboot persistence** — DONE. Two user LaunchAgents supervise the stack with
+      KeepAlive (see "How it runs" above). Custom agents (not `hermes gateway install`,
+      which assumes the default `~/.hermes` home, not our managed `.hermes-runtime`).
+      Reboots still need one FileVault password entry (see note above).
 - [ ] **Slack scopes** — add `groups:read` (list private channels) and `mpim:history`
       (multi-person DMs), then reinstall the Slack app. Core posting/DMs already work.
 - [ ] **Decommission the laptop** — keep its gateway stopped; two gateways on the same
