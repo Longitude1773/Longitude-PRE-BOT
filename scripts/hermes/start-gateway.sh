@@ -62,6 +62,13 @@ if [[ -z "${HERMES_AGENT_DIR:-}" ]]; then
   exit 1
 fi
 
+# Ensure the gateway's own venv is on PATH so preflight (which invokes bare
+# `python3`) and the gateway itself resolve to the venv interpreter that has
+# the hermes deps (dotenv/firecrawl/slack_bolt), rather than a system python3.
+if [[ -x "$HERMES_AGENT_DIR/venv/bin/python3" ]]; then
+  export PATH="$HERMES_AGENT_DIR/venv/bin:$PATH"
+fi
+
 if [[ -z "${SYSTEM_PROMPT_FILE:-}" ]]; then
   echo "Missing SYSTEM_PROMPT_FILE in $HERMES_ENV_FILE"
   exit 1
