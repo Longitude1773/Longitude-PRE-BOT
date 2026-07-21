@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  preSiteBaseUrl,
+  preSitePropertyUrl,
   r2AddressSlug,
   r2DatePrefix,
   r2FallbackSlug,
@@ -77,4 +79,35 @@ test("r2KeyForEval falls back to zpid slug when address missing", () => {
     r2KeyForEval({ address: "", mlsNumber: "ZPID-68839940", createdAt: "2026-06-03T00:00:00+00:00" }),
     "2026/06/03/zpid-68839940.pdf",
   );
+});
+
+test("preSiteBaseUrl defaults to the live domain and honors PRE_SITE_URL", () => {
+  const prev = process.env.PRE_SITE_URL;
+  try {
+    delete process.env.PRE_SITE_URL;
+    assert.equal(preSiteBaseUrl(), "https://evaluations.longitude.network");
+    process.env.PRE_SITE_URL = "https://staging.example.com/";
+    assert.equal(preSiteBaseUrl(), "https://staging.example.com");
+  } finally {
+    if (prev === undefined) delete process.env.PRE_SITE_URL;
+    else process.env.PRE_SITE_URL = prev;
+  }
+});
+
+test("preSitePropertyUrl uses the address slug, falls back to the id", () => {
+  const prev = process.env.PRE_SITE_URL;
+  try {
+    delete process.env.PRE_SITE_URL;
+    assert.equal(
+      preSitePropertyUrl({ address: "1583 Three Kings Drive, Park City, UT 84060", mlsNumber: "12602327" }),
+      "https://evaluations.longitude.network/properties/1583-three-kings-drive-park-city-ut-84060",
+    );
+    assert.equal(
+      preSitePropertyUrl({ address: "", mlsNumber: "ZPID-68839940" }),
+      "https://evaluations.longitude.network/properties/zpid-68839940",
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PRE_SITE_URL;
+    else process.env.PRE_SITE_URL = prev;
+  }
 });

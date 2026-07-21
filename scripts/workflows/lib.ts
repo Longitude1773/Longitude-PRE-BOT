@@ -194,6 +194,20 @@ export function r2KeyForEval(o: {
   return `${r2DatePrefix(o.createdAt)}/${r2KeySlug(o.address, o.mlsNumber)}.pdf`;
 }
 
+// Base URL of the public PRE site (agents browse/download completed evals here).
+// Overridable via PRE_SITE_URL; defaults to the live custom domain. No trailing slash.
+export function preSiteBaseUrl(): string {
+  return (process.env.PRE_SITE_URL || "https://evaluations.longitude.network").replace(/\/+$/, "");
+}
+
+// Canonical /properties/<slug> URL for one evaluation. The slug reproduces the
+// bot's r2KeySlug() byte-for-byte, matching the PRE site's agent_site_listings
+// view; the site also accepts the MLS number here and 301s to this slug, so the
+// link resolves once the eval is approved and its PDF exists on the site.
+export function preSitePropertyUrl(o: { address?: unknown; mlsNumber?: string | number }): string {
+  return `${preSiteBaseUrl()}/properties/${r2KeySlug(o.address, o.mlsNumber)}`;
+}
+
 function normalizeThreadTs(threadTs: string) {
   return threadTs.replace(/[^0-9A-Za-z._-]/g, "_");
 }
@@ -538,6 +552,7 @@ export async function buildReviewMessage(data: EvalData) {
     `• Conservative: ${fmtCurrency(data.projections!.low.revenue)}/yr (${fmtPct(data.projections!.low.occupancy)} occ, ${fmtCurrency(data.projections!.low.adr)} ADR)`,
     "",
     comparableLine,
+    `<${preSitePropertyUrl(data)}|View on PRE site> (live once approved)`,
     "",
     ...buildListingAgentBlock(listing),
     "",
