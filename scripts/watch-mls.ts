@@ -810,10 +810,10 @@ async function handleScrapeMlsListingCommand(context: BrowserContext, surfacePag
       try {
         const candidate = await extractMlsListingFromPage(page, command.url);
         const looksIncomplete =
+          !candidate.listingId ||
+          !candidate.address ||
           !candidate.price ||
-          /detail-(?:private|rev\d+)/i.test(candidate.address) ||
-          /^property description$/i.test(candidate.description || "") ||
-          /^property description$/i.test(candidate.nightlyRentalAllowed || "");
+          /detail-(?:private|rev\d+)/i.test(candidate.address);
         if (looksIncomplete) {
           throw new Error(`MLS scrape returned incomplete listing data on attempt ${attempt + 1}.`);
         }
