@@ -40,6 +40,22 @@ auto-logs-in and the agents start. Net: **crash recovery is fully automatic**; a
 **reboot needs one password entry**, then everything comes back. Zero-touch reboots would
 require disabling FileVault (not recommended on this credentialed machine).
 
+### Updating the Mini after a push from another machine
+
+The Mini does not auto-pull. On the Mini, run:
+
+```bash
+cd ~/projects/Longitude-PRE-BOT && ./scripts/deploy-pull.sh
+```
+
+It fast-forwards `origin/main` and restarts **only** the services whose code changed:
+`scripts/workflows/**` + `lib.ts` → no restart (each eval/review is a fresh `tsx`
+subprocess that re-reads the files); `scripts/watch-mls.ts` / `browser-runtime.ts` →
+restarts the watcher (long-lived); `HERMES.md` / `scripts/hermes/*` → restarts the
+gateway. Refuses to run on a dirty tree; supports `--dry-run`, `--restart-both`,
+`--no-restart`. Manual fallback: `git pull --ff-only` then
+`launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.{gateway,watcher}` as needed.
+
 ## What this session did — machine migration (laptop `erik` → mini `erikmikkelsen`)
 
 Followed `MIGRATION.md`, with several machine-specific gaps that doc did not cover.

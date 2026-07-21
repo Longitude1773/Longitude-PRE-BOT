@@ -73,7 +73,13 @@ Start both with `npm run str:start`; gateway only with `npm run hermes:start`. L
 ## Deployment (current)
 
 Runs on a dedicated **Mac mini** (`~/projects/Longitude-PRE-BOT`, user
-`erikmikkelsen`). The gateway needs its venv on PATH so its bundled Python (3.11 with
+`erikmikkelsen`), supervised by two **launchd** user agents
+(`com.longitude.pre-bot.gateway` / `…watcher`, `KeepAlive` crash-restart; plists in
+`deploy/launchd/`). The gateway needs its venv on PATH so its bundled Python (3.11 with
 `dotenv`/`firecrawl`/`slack_bolt`) is used — `scripts/hermes/start-gateway.sh` handles
-this. Not yet a launchd service, so it does not survive reboot; `hermes gateway install`
-would make it always-on. See `HANDOFF.md` for machine-specific details.
+this.
+
+**Deploying code changes:** the Mini does not auto-pull. After pushing from another
+machine, run `./scripts/deploy-pull.sh` on the Mini — it fast-forwards `origin/main` and
+restarts only the services whose code changed. FileVault is on, so a reboot needs one
+password entry at the console before the agents start. See `HANDOFF.md` for details.
