@@ -109,6 +109,21 @@ Everything below is done and verified:
 - [ ] Optional: clean up `.bak` files left under `.hermes-runtime/`, `~/.hermes/`, and
       `skills/` (safety backups from the path fixups).
 
+## Hero-photo R2 mirror + backfill (2026-07-23)
+
+`96136e5` added the "mirror `photo-0` to `img.longitude.network/<id>/photo-0.jpg`"
+step to the manual (`mls_on_demand`) and Zillow (`zillow_on_demand`) eval paths — it
+previously only ran in the MLS-review-queue path, so those PRE Site tiles showed a
+placeholder. That fix is forward-only, so evals processed before it still needed their
+hero pushed to R2. **Backfilled the three affected evals** (12601448, ZPID-111715943,
+12602182) — all now 200 at `img.longitude.network/<id>/photo-0.jpg`.
+
+Reusable helper for future gaps: `scripts/backfill-hero-images-r2.ts`. It scans the
+Listings table for manual/Zillow rows whose `data/images/<id>/photo-0.jpg` is on disk
+but missing on R2, and uploads them (idempotent; `--dry-run` to preview; pass explicit
+ids to target). Run it with `.env` loaded:
+`set -a; source .env; set +a; ./node_modules/.bin/tsx scripts/backfill-hero-images-r2.ts`.
+
 ## Gotchas worth remembering
 
 - Test the bot on **fresh Slack threads**, not ones with a history of failed turns —
