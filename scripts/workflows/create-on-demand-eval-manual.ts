@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 
+import { uploadImageToR2 } from "../r2.ts";
 import { appendSheetRow, readSheet } from "../sheets.ts";
 import { buildListingRow } from "../write-sheet-data.ts";
 import {
@@ -51,12 +52,24 @@ async function downloadListingImages(listingId: string, photoUrls: string[]) {
     encoding: "utf8",
   });
   if (result.status !== 0) return [] as string[];
+  let photos: string[] = [];
   try {
     const parsed = JSON.parse((result.stdout || "[]").trim() || "[]");
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string" && value.length > 0) : [];
+    photos = Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string" && value.length > 0) : [];
   } catch {
-    return [];
+    photos = [];
   }
+  // Mirror the hero photo to the PUBLIC R2 images bucket so the PRE Site can show
+  // it at img.longitude.network/<mls>/photo-0.jpg. Best-effort: an image upload
+  // failure must NEVER block PRE processing. (Matches the MLS-review-queue path.)
+  if (photos.length > 0) {
+    try {
+      await uploadImageToR2(`${listingId}/photo-0.jpg`, photos[0]);
+    } catch (err) {
+      console.error(`R2 image upload failed for ${listingId}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  return photos;
 }
 
 async function main() {
