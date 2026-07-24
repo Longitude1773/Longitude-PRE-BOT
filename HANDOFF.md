@@ -4,7 +4,113 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-07-06
+## Current status — 2026-07-24 — HubSpot agent tasks, Phase 2 (wired into approve)
+
+The HubSpot integration now runs **automatically on the Slack "approve" path**, and the
+email copy has **moved out of the bot into a HubSpot Sales Template**. On approve the bot
+only: (1) upserts the listing agent as a HubSpot contact, (2) stamps tracking properties
+that feed the template's personalization tokens, (3) creates a short reminder task, and
+(4) writes the HubSpot ids back to Supabase. It no longer renders any email HTML.
+
+### ⚠️ MANUAL STEP remaining before this is live on the Mini
+
+1. ✅ **DONE — migration run.** `sql/2026-07-24-hubspot-writeback-columns.sql` has been
+   applied in Supabase (adds `hubspot_contact_id`, `hubspot_task_id`,
+   `hubspot_task_created_at` to `evaluations`). Idempotency + write-back verified live.
+2. **Add `HUBSPOT_PRIVATE_APP_TOKEN`** to the **Mini's** `.env` (it's only in this
+   laptop's `.env` today). The module lazy-loads `.env`, so no gateway restart needed —
+   but without the token every approve posts "⚠️ HubSpot task not created". Add it before
+   (or alongside) running `deploy-pull.sh` on the Mini.
+
+Then deploy as usual: commit → push → `./scripts/deploy-pull.sh` on the Mini. The approve
+handler is under `scripts/workflows/**`, so **no service restart** is required (each
+approve is a fresh `tsx` subprocess).
+
+### Behavior on approve (all best-effort, never blocks the approval/PDF)
+
+Runs LAST in `approve-eval.ts`, after PDF + R2 + status flip + thread context. Operates on
+the exact resolved `Eval ID` (no version ambiguity — note **197/424 MLS#s have multiple
+eval rows** from re-evals). Idempotent on that row's `hubspot_task_id`.
+
+- **wrong-source** (`listing_source != new_listing`, i.e. manual/on-demand PREs) → skip,
+  silent.
+- **already-exists** (row has `hubspot_task_id`) → skip, silent.
+- **no-agent-email** → skip + posts `⚠️ No HubSpot task — <reason>` (actionable; most
+  listings lack agent email — watcher only captures it via the business-card popup).
+- **error / write-back-failed** → posts a ⚠️ note; approval still succeeds.
+
+### Shared function (one code path)
+
+`createAgentTaskForListing({ evalId? | mlsNumber?, dryRun?, force? })` in
+`scripts/hubspot-agent-task.ts` is called by **both** the by-hand CLI and the approve
+handler, so they run identical code. Returns `{ ok, skipped?, reason?, agentStatus,
+contactId, taskId, taskUrl, contactCreated, writeBackFailed }`.
+
+```bash
+npx tsx scripts/hubspot-agent-task.ts --mls 12603349 --dry-run   # resolve, write nothing
+npx tsx scripts/hubspot-agent-task.ts --eval-id <uuid>           # by hand, for real
+# --force bypasses the source/status guards (testing only)
+```
+
+### Agent status flag (which template to use)
+
+Contact match by exact primary email decides `agent_status`: **EXISTING** if found, **NEW**
+if the bot created it. Reflected on the task so Erik picks the right template:
+- Subject: `Send revenue evaluation email — <address> · <NEW|EXISTING> agent`
+- Body names the template: `New Listing PRE Delivery (New contact)` /
+  `… (Existing contact)`.
+
+### Property / field mapping (verified live)
+
+Contact upsert (match `lower(email)`):
+- *create-only:* `firstname`/`lastname` (first+last token, middle dropped), `email`,
+  `phone`, `company` = brokerage, `lifecyclestage="lead"`, `agent_source="PRE Bot"`.
+- *always set:* `last_evaluated_property` = `"<street>, <city>"` · `last_evaluation_url`
+  = `preSitePropertyUrl()` · `last_evaluation_revenue_range` = `low_rev→high_rev`
+  (`"$54,400 to $97,900"`) · `last_evaluation_sent_date` = today ·
+  `evaluations_sent_count` = prior+1.
+
+Task props: `hs_task_status=NOT_STARTED`, `hs_task_type=EMAIL`, `hs_task_priority=HIGH`,
+`hubspot_owner_id=80608210`, `hs_timestamp`=now ms, associated to the contact (typeId
+**204**).
+
+Supabase write-back (`evaluations` by `eval_id`): `hubspot_contact_id`, `hubspot_task_id`,
+`hubspot_task_created_at`.
+
+### Files
+
+- `scripts/hubspot.ts` — CRM v3 client (unchanged from Phase 1): `findContactByEmail` /
+  `createContact` / `updateContact` / `createTask` (assoc typeId 204) / `taskUrl` /
+  `contactUrl`. Portal 242965527, host **na2**.
+- `scripts/hubspot-task-template.ts` — **now just the task subject + body** keyed on
+  agent status. The old HTML email builder was removed (copy lives in HubSpot now).
+- `scripts/hubspot-agent-task.ts` — the shared `createAgentTaskForListing()` + a thin CLI
+  wrapper. Lazy-loads `.env`.
+- `scripts/workflows/approve-eval.ts` — best-effort HubSpot call + ⚠️ Slack notes.
+- `sql/2026-07-24-hubspot-writeback-columns.sql` — the write-back migration (run by hand).
+
+### Validation (live, 2026-07-24)
+
+- **Existing-agent + new revenue-range property:** approved MLS `12603238` (Ron Wilstein
+  `489981101794`). Verified: subject `… · EXISTING agent`, body names the Existing-contact
+  template, `NOT_STARTED/EMAIL/HIGH`, owner 80608210, association, and contact
+  `last_evaluation_revenue_range="$54,400 to $97,900"` + all tracking props +
+  `last_evaluation_sent_date=2026-07-24`.
+- **Graceful degradation:** a run before the migration correctly failed-soft (task created,
+  write-back logged its reason, no throw) — proves the step is non-blocking.
+- **Write-back + idempotency (post-migration):** run 1 created task `385998305982` and
+  stamped `hubspot_contact_id/task_id/created_at` on eval `138192cf`; run 2 read the column
+  and skipped (`already-exists`). Per-eval-row idempotency confirmed (the MLS's other eval
+  row stays untouched).
+- **Source gate** returns a soft skip (not a throw) for `mls_on_demand`, so the approve
+  path stays clean.
+- **Not yet exercised live:** a genuinely **NEW** agent (both earlier test agents now exist
+  in HubSpot). The NEW code path is otherwise identical bar the subject/body strings.
+
+**Test-artifact cleanup:** several throwaway tasks now sit on the Ron Wilstein contact
+`489981101794` (Phase 1 + Phase 2 runs) — delete them in HubSpot when convenient.
+
+## Previous status — 2026-07-06
 
 **The bot is fully migrated from the old laptop to this Mac mini and operational.**
 Gateway + MLS watcher run detached and Slack-connected; an end-to-end test passed (the

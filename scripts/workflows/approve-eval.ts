@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 
 import { asString, pdfPathForEval, r2KeyForEval, resolveEvaluationByThread, resolveEvaluationByMls, updateEvaluationSummaryRow, upsertThreadContext } from "./lib.ts";
-import { upload } from "../slack.ts";
+import { reply, upload } from "../slack.ts";
 import { uploadPdfToR2 } from "../r2.ts";
+import { createAgentTaskForListing, type CreateAgentTaskResult } from "../hubspot-agent-task.ts";
 
 function argValue(flag: string) {
   const index = process.argv.indexOf(flag);
@@ -24,6 +25,7 @@ async function main() {
   if (!resolved) throw new Error("Evaluation not found.");
 
   const { row, path, data } = resolved;
+  let hubspot: CreateAgentTaskResult | { ok: false; reason: string } | undefined;
   // Name the PDF after the street address (house number, street, unit) rather
   // than the MLS#/ZPID. Recomputed here so the generated file + Slack upload
   // always match the address even if an older row stored an id-based path.
@@ -67,6 +69,37 @@ async function main() {
         },
       });
     }
+
+    // Best-effort HubSpot: upsert the listing agent contact + create a reminder
+    // task. Runs LAST so a HubSpot failure can never undo the approval, PDF,
+    // R2 upload, or status flip — all already done above. Never throws out of
+    // here; a genuine failure posts a ⚠️ note to the thread but the approve
+    // still succeeds. Operates on the exact resolved Eval ID (no version
+    // ambiguity), and is idempotent on that row's hubspot_task_id.
+    try {
+      const result = await createAgentTaskForListing({ evalId: asString(row["Eval ID"]) });
+      hubspot = result;
+      // Speak up only when it's actionable: a genuine skip we'd want to fix
+      // (no agent email captured) or a write-back that didn't persist. Silent
+      // on by-design skips (wrong-source, already-exists).
+      if (targetThreadTs && result.skipped === "no-agent-email") {
+        await reply(channel, targetThreadTs, `⚠️ No HubSpot task — ${result.reason}`);
+      } else if (targetThreadTs && result.writeBackFailed && result.taskUrl) {
+        await reply(
+          channel,
+          targetThreadTs,
+          `⚠️ HubSpot task created (${result.taskUrl}) but ids were not saved to Supabase — ` +
+            `run the hubspot-writeback columns migration.`,
+        );
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      hubspot = { ok: false, reason };
+      console.error(`HubSpot task step failed (non-blocking): ${reason}`);
+      if (targetThreadTs) {
+        await reply(channel, targetThreadTs, `⚠️ HubSpot task not created — ${reason}`);
+      }
+    }
   }
 
   console.log(JSON.stringify({
@@ -76,6 +109,7 @@ async function main() {
     threadTs: targetThreadTs,
     pdfPath,
     dryRun,
+    hubspot,
   }, null, 2));
 }
 
