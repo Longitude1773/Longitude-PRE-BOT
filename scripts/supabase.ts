@@ -245,12 +245,32 @@ export function toSheetRow(sheetName: string, dbRow: Record<string, unknown>): R
   return result;
 }
 
+// PostgREST caps a single response at 1000 rows, so reads must page explicitly.
+// A silent truncation here looks like "row doesn't exist" to every caller that
+// builds a lookup from readTable (dedupe checks especially), so page to the end.
+const READ_PAGE_SIZE = 1000;
+
 /** Read all rows from a table, returned in sheet-key format */
 export async function readTable(sheetName: string) {
   const table = tableName(sheetName);
-  const { data, error } = await supabase.from(table).select("*");
-  if (error) throw new Error(`Supabase read error (${sheetName}): ${error.message}`);
-  return (data ?? []).map((row) => toSheetRow(sheetName, row));
+  const orderBy = pkDbCol(sheetName);
+  const rows: Record<string, unknown>[] = [];
+
+  for (let from = 0; ; from += READ_PAGE_SIZE) {
+    // Order by PK so page boundaries stay stable across requests.
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .order(orderBy, { ascending: true })
+      .range(from, from + READ_PAGE_SIZE - 1);
+    if (error) throw new Error(`Supabase read error (${sheetName}): ${error.message}`);
+
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < READ_PAGE_SIZE) break;
+  }
+
+  return rows.map((row) => toSheetRow(sheetName, row));
 }
 
 /** Insert a single row (sheet-key object) */
