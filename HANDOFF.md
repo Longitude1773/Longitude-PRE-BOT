@@ -67,15 +67,16 @@ remedy is the same kickstart.** A real liveness check (below) is the missing pie
 ### ⚠️ The documented health check is misleading
 
 `.hermes-runtime/gateway_state.json` read `"state": "connected"` the entire time the
-gateway was deaf — its `updated_at` was **6 days stale**. Always check the timestamp, not
-just the state:
+gateway was deaf. Worse, the file is **useless as a liveness check in either direction**:
+it is written only when the connection state *changes*, so `updated_at` being old is the
+normal condition for a healthy long-running gateway. (Verified after the fix: gateway
+connected and working, `updated_at` unchanged 22 minutes later.)
+
+The signal that actually distinguishes the two states is the reconnect loop in the log:
 
 ```bash
-python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack'];print(d['state'], d['updated_at'])"
-# a fresh updated_at is the real signal; 'connected' alone means nothing
-
-# is it stuck in the retry loop? run twice — a climbing count means yes
-grep -c 'Session is closed' /tmp/str-bot-gateway.log
+# sample twice — a climbing count means the socket is dead and needs a kickstart
+grep -c 'Session is closed' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' /tmp/str-bot-gateway.log
 ```
 
 Same trap on the pipeline side: the watcher logs `queue processor { ok: true, ... }` even
@@ -238,9 +239,16 @@ launchctl kickstart -k gui/501/com.longitude.pre-bot.watcher     # restart watch
 launchctl bootout   gui/501/com.longitude.pre-bot.gateway        # stop until next load/reboot
 launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.longitude.pre-bot.gateway.plist  # (re)load
 
-# health check — print updated_at too; 'connected' on its own is NOT proof of life
-# (it read "connected" through a 5-day outage). See the 2026-08-10 status section.
+# health check — gateway_state.json is NOT a liveness signal. It is written only on
+# state *transitions*, so a healthy gateway that connected weeks ago and a gateway that
+# died mid-session look identical: state="connected", updated_at old. It read
+# "connected" through the entire 5-day 2026-08-10 outage.
 python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack'];print(d['state'], d['updated_at'])"
+
+# the real check — is it stuck in the reconnect loop? sample twice; a climbing count
+# means the socket is dead and only a kickstart will fix it.
+grep -c 'Session is closed' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' /tmp/str-bot-gateway.log
+
 tail -f /tmp/str-bot-gateway.log   # and /tmp/str-mls-watch.log
 ```
 
@@ -311,9 +319,19 @@ Everything below is done and verified:
 
 - [x] **Commit `scripts/hermes/start-gateway.sh`** — DONE in `3653e5d` (venv-PATH fix).
 - [ ] **Alert on a stalled pipeline** — the 2026-08-10 outage ran 4 days unnoticed because
-      nothing checks outcomes. Two cheap signals would have caught it within the hour:
-      zero listings posted in 24h, and a `gateway_state.json` `updated_at` older than a few
-      minutes. Highest-value item on this list.
+      nothing checks outcomes. Highest-value item on this list. Two signals, both of which
+      were already sitting in files/logs the whole time:
+      - *pipeline:* any `action: "failed"` in the queue-processor result, or a ready
+        (`strApproved`) queue item older than ~2h. The watcher already parses
+        `actionCounts` in `processReviewQueue()`, so this is a few lines there. Dedup via
+        the same pattern as `data/inbox/mls-approval-alert-state.json`.
+      - *gateway:* a climbing `Session is closed` count in `/tmp/str-bot-gateway.log`.
+        **Do not** use `gateway_state.json` freshness — it only writes on state changes,
+        so a healthy long-lived connection looks identical to a dead one.
+
+      Both alert via outbound Slack (`scripts/slack.ts`, Web API), which kept working
+      through both failures. Residual gap: if outbound Slack itself breaks, nothing can
+      reach you — would need email/push, probably not worth it yet.
 - [ ] **Teach `deploy-pull.sh` about the data layer** — it infers restarts from
       `watch-mls.ts` / `browser-runtime.ts` only, but the watcher also imports
       `scripts/sheets.ts` → `scripts/supabase.ts` in its long-lived process. A change to
