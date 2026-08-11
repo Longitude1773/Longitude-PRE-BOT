@@ -4,7 +4,113 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-07-24 — HubSpot agent tasks, Phase 2 (wired into approve)
+## Current status — 2026-08-10 — recovered from a 4-day silent stall
+
+The bot had been queuing listings without evaluating or posting them since **Aug 6**.
+Two *independent* failures, neither of which crashed anything — both services stayed
+"running" the whole time, so launchd's `KeepAlive` never noticed and nothing alerted.
+Both are fixed and the backlog is drained.
+
+### Failure 1 — Supabase 1000-row cap silently truncated every read (the queue backup)
+
+`readTable()` issued a bare `select("*")`. PostgREST caps a single response at **1000
+rows**, so once a table crossed that line the extra rows came back missing — which is
+indistinguishable from "row doesn't exist" to any caller building a lookup from it.
+
+The cascade:
+
+1. `listings` crossed 1000 rows on **Aug 6 16:13 MDT** (that very batch took it 1001→1017).
+2. MLS **12603612** landed at row #1014 → invisible to the dedupe in `existingMlsState()`.
+3. It's a `hold_missing_str_approval` item, so it **never leaves the queue** — it got
+   re-added to the listings insert batch every single cycle.
+4. `insertRows()` is one atomic multi-row insert, so that one duplicate PK aborted the
+   **entire** batch; the catch then marked *every* pending post failed and re-queued them.
+
+Net: 15 STR-approved listings stuck, nothing posted for 4 days, queue growing every cycle.
+
+**Fixed in `1c97971`** — `readTable()` pages with `.range()` until a short page comes back,
+ordered by each table's PK so page boundaries stay stable. Two tables were truncating far
+worse than `listings`:
+
+| Table | True rows | Was returning |
+|---|---|---|
+| Comparables | 2390 | 1000 |
+| Monthly Projections | 9660 | 1000 |
+
+⚠️ **Anything that read comps or monthly projections through `readSheet` before Aug 10 was
+working off a partial slice** — including the "read past Adjustments to learn from prior
+feedback" step. Worth a look if past projections seem off.
+
+**Hardened in `0969552`** — pagination removed the trigger, but not the fragility:
+- Listing writes now use `upsertSheetRows()` (new `upsertRows()` in `supabase.ts`, keyed on
+  the sheet PK) so a legitimately-present row can't reject its whole batch.
+- The write phase no longer batches across listings. Each ready listing carries its own
+  listing row + evaluation and writes them inside the same per-listing `try/catch` that
+  already wrapped the Slack post, so **one bad listing re-queues itself and nothing else**.
+
+### Failure 2 — gateway Slack socket died and never recovered
+
+Separately, the gateway's socket-mode connection dropped on **Aug 5 ~10:05 MDT** and spun
+in an unrecoverable retry loop (`RuntimeError: Session is closed`, underlying `aiohttp`
+connector permanently closed) — **43k+** retries, no reconnect, process never exited.
+
+Outbound posting kept working through Aug 6 because `scripts/slack.ts` uses the Web API
+directly. Only **inbound** was dead: thread replies, adjustments, and approvals were
+silently dropped for 5 days.
+
+Fixed by `launchctl kickstart -k gui/501/com.longitude.pre-bot.gateway`. It pruned a pile
+of stale sessions from the crashed instance and reconnected; retry count then held flat.
+
+**No code fix for this one — if the socket dies again, the symptom is identical and the
+remedy is the same kickstart.** A real liveness check (below) is the missing piece.
+
+### ⚠️ The documented health check is misleading
+
+`.hermes-runtime/gateway_state.json` read `"state": "connected"` the entire time the
+gateway was deaf — its `updated_at` was **6 days stale**. Always check the timestamp, not
+just the state:
+
+```bash
+python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack'];print(d['state'], d['updated_at'])"
+# a fresh updated_at is the real signal; 'connected' alone means nothing
+
+# is it stuck in the retry loop? run twice — a climbing count means yes
+grep -c 'Session is closed' /tmp/str-bot-gateway.log
+```
+
+Same trap on the pipeline side: the watcher logs `queue processor { ok: true, ... }` even
+when every listing inside failed. **`ok: true` refers to the run, not the listings** — read
+`actionCounts` for `failed`.
+
+### Recovery + current state
+
+Ran `process-mls-review-queue.ts` by hand (watcher was idle outside its 7:00–19:00 MT scan
+window, so no double-post risk): **15 evaluations posted, 0 failures.** Listings 1017→1032,
+Evaluations 805→820. Queue is down to **4 legitimate `hold_missing_str_approval` items**
+(12603149, 12603193, 12603345, 12603612) — all held on an empty nightly-rental field, which
+is correct behavior, not a failure.
+
+Both services were restarted. The **watcher restart mattered**: it calls
+`readSheet("Evaluations")` in its long-lived process, so it was still holding the pre-fix
+`readTable` in memory. `evaluations` is at 820 — under the cap today, but it would have hit
+the identical stall in a few weeks. **Any change to `scripts/supabase.ts` or
+`scripts/sheets.ts` needs a watcher restart**, which `deploy-pull.sh` does not currently
+infer (it only watches `watch-mls.ts` / `browser-runtime.ts`).
+
+### Not done / known rough edges
+
+- **Per-listing isolation has not been exercised under a real failure.** Staging one would
+  have posted fake evaluations to the live Slack channel. It's structurally sound and
+  typechecked, but the next genuine failure is its first live test.
+- **`writeEvaluationVersionsBatch` isn't transactional** — three sequential inserts
+  (Evaluations → Monthly Projections → Comparables). A failure between them re-queues the
+  listing, which regenerates the evaluation with a fresh UUID next cycle and orphans the
+  partial rows. Rare, and far better than the old behavior, but not clean.
+- **Nothing alerts on a stalled pipeline.** Both failures were invisible until someone
+  looked. A check on "listings posted in the last 24h" plus a fresh-`updated_at` assertion
+  would have caught both within an hour.
+
+## Previous status — 2026-07-24 — HubSpot agent tasks, Phase 2 (wired into approve)
 
 The HubSpot integration now runs **automatically on the Slack "approve" path**, and the
 email copy has **moved out of the bot into a HubSpot Sales Template**. On approve the bot
@@ -110,7 +216,7 @@ Supabase write-back (`evaluations` by `eval_id`): `hubspot_contact_id`, `hubspot
 **Test-artifact cleanup:** several throwaway tasks now sit on the Ron Wilstein contact
 `489981101794` (Phase 1 + Phase 2 runs) — delete them in HubSpot when convenient.
 
-## Previous status — 2026-07-06
+## Earlier status — 2026-07-06
 
 **The bot is fully migrated from the old laptop to this Mac mini and operational.**
 Gateway + MLS watcher run detached and Slack-connected; an end-to-end test passed (the
@@ -132,8 +238,9 @@ launchctl kickstart -k gui/501/com.longitude.pre-bot.watcher     # restart watch
 launchctl bootout   gui/501/com.longitude.pre-bot.gateway        # stop until next load/reboot
 launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.longitude.pre-bot.gateway.plist  # (re)load
 
-# health check
-python3 -c "import json;print(json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack']['state'])"
+# health check — print updated_at too; 'connected' on its own is NOT proof of life
+# (it read "connected" through a 5-day outage). See the 2026-08-10 status section.
+python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack'];print(d['state'], d['updated_at'])"
 tail -f /tmp/str-bot-gateway.log   # and /tmp/str-mls-watch.log
 ```
 
@@ -202,8 +309,16 @@ Everything below is done and verified:
 
 ## Outstanding / optional (none block operation)
 
-- [ ] **Commit `scripts/hermes/start-gateway.sh`** — the venv-PATH fix (currently
-      uncommitted working-tree change).
+- [x] **Commit `scripts/hermes/start-gateway.sh`** — DONE in `3653e5d` (venv-PATH fix).
+- [ ] **Alert on a stalled pipeline** — the 2026-08-10 outage ran 4 days unnoticed because
+      nothing checks outcomes. Two cheap signals would have caught it within the hour:
+      zero listings posted in 24h, and a `gateway_state.json` `updated_at` older than a few
+      minutes. Highest-value item on this list.
+- [ ] **Teach `deploy-pull.sh` about the data layer** — it infers restarts from
+      `watch-mls.ts` / `browser-runtime.ts` only, but the watcher also imports
+      `scripts/sheets.ts` → `scripts/supabase.ts` in its long-lived process. A change to
+      either currently deploys without the watcher picking it up; restart it by hand until
+      this is fixed.
 - [x] **Reboot persistence** — DONE. Two user LaunchAgents supervise the stack with
       KeepAlive (see "How it runs" above). Custom agents (not `hermes gateway install`,
       which assumes the default `~/.hermes` home, not our managed `.hermes-runtime`).
@@ -235,6 +350,10 @@ ids to target). Run it with `.env` loaded:
 - Test the bot on **fresh Slack threads**, not ones with a history of failed turns —
   failed-turn memory can re-confuse the agent (seen as `invalid_blocks` / oversized
   approval cards while it thrashed mid-migration; cleared on a clean session).
+- **A "running" process is not a working one.** Both halves of the 2026-08-10 outage kept
+  their processes alive and their happy-path logs green while doing nothing useful — so
+  `launchctl list` and `ok: true` both lied. Verify outcomes (rows written, messages
+  posted, timestamps moving), not liveness.
 - Business data (Listings/Evaluations/Comparables) is in **Supabase** and PDFs in **R2**,
   so it is safe regardless of which machine runs the bot — a migration mainly moves
   credentials and local caches.
