@@ -292,6 +292,21 @@ export async function insertRows(sheetName: string, rows: Record<string, unknown
   return { message: `${rows.length} rows appended` };
 }
 
+/**
+ * Insert multiple rows, updating any that already exist on the sheet's primary
+ * key. Use this instead of insertRows when a row may legitimately already be
+ * present — a plain insert rejects the *entire* batch on one duplicate key.
+ */
+export async function upsertRows(sheetName: string, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return { message: "0 rows upserted" };
+  const table = tableName(sheetName);
+  const conflictTarget = pkDbCol(sheetName);
+  const dbRows = rows.map((row) => toDbRow(sheetName, row));
+  const { error } = await supabase.from(table).upsert(dbRows, { onConflict: conflictTarget });
+  if (error) throw new Error(`Supabase batch upsert error (${sheetName}): ${error.message}`);
+  return { message: `${rows.length} rows upserted` };
+}
+
 /** Update a row by primary key value (sheet-key object for the update data) */
 export async function updateByPk(sheetName: string, pkValue: string | number, row: Record<string, unknown>) {
   const table = tableName(sheetName);

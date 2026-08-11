@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { readTable, insertRow, insertRows, updateByPk, findRows, toDbRow } from "./supabase.ts";
+import { readTable, insertRow, insertRows, upsertRows, updateByPk, findRows, toDbRow } from "./supabase.ts";
 
 /**
  * Google Sheets utility — now backed by Supabase Postgres.
@@ -147,6 +147,16 @@ export async function appendSheetRows(sheetName: string, rowsData: string | unkn
   }
   const rows = parsedRows.map((row) => normalizeRowData(sheetName, row) as Record<string, unknown>);
   return insertRows(sheetName, rows);
+}
+
+/** Like appendSheetRows, but rows that already exist on the PK are updated instead of rejected. */
+export async function upsertSheetRows(sheetName: string, rowsData: string | unknown[]) {
+  const parsedRows = typeof rowsData === "string" ? JSON.parse(rowsData) : rowsData;
+  if (!Array.isArray(parsedRows) || parsedRows.length === 0) {
+    throw new Error("Batch rows must be a non-empty array.");
+  }
+  const rows = parsedRows.map((row) => normalizeRowData(sheetName, row) as Record<string, unknown>);
+  return upsertRows(sheetName, rows);
 }
 
 export async function updateSheetRow(sheetName: string, primaryKey: string | number, rowData: string | unknown) {

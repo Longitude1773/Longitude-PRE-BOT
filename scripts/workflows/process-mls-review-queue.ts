@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { appendSheetRows, readSheet } from "../sheets.ts";
+import { readSheet, upsertSheetRows } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
 import { deriveSpreadScenarios, inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
@@ -301,13 +301,20 @@ async function processQueue() {
 
   const survivors: QueueItem[] = [];
   const results: Record<string, unknown>[] = [];
-  const pendingListings: Record<string, unknown>[] = [];
-  const pendingEvaluations: Array<{ data: EvalData; flags: Record<string, string | boolean> }> = [];
+  // Listing rows for items that stop at a skip/hold — nothing else to write for
+  // them, so one batch upsert is fine.
+  const skippedListings: Record<string, unknown>[] = [];
+  // One entry per ready listing, carrying everything that listing needs written.
+  // Keeping the listing row and evaluation together (rather than in separate
+  // batch arrays) is what lets the write phase fail a single listing without
+  // taking the rest of the cycle down with it.
   const pendingPosts: Array<{
     item: QueueItem;
     address: string;
     region: string;
     mediumRevenue: number;
+    listingRow: Record<string, unknown> | null;
+    evaluation: { data: EvalData; flags: Record<string, string | boolean> } | null;
   }> = [];
 
   for (const item of items) {
@@ -408,11 +415,16 @@ async function processQueue() {
       const listingPath = resolve(repoRoot, `data/listing-${item.mlsNumber}.json`);
       await writeFile(listingPath, `${JSON.stringify(listingData, null, 2)}\n`);
 
-      if (!current.listingExists) {
-        pendingListings.push(buildListingRow(listingData, { source: "new_listing", status: "Active" }));
-      }
+      // Built here because every disposition below (including the skips) still
+      // records the listing. Ready-for-review items carry this row on their
+      // pendingPosts entry so it is written inside their isolated try/catch;
+      // skipped items have nothing else to write, so they go in a batch.
+      const listingRow = current.listingExists
+        ? null
+        : buildListingRow(listingData, { source: "new_listing", status: "Active" });
 
       if (strRejected) {
+        if (listingRow) skippedListings.push(listingRow);
         results.push({
           mlsNumber: item.mlsNumber,
           action: "skip_not_str_approved",
@@ -422,6 +434,7 @@ async function processQueue() {
         continue;
       }
       if (!strApproved) {
+        if (listingRow) skippedListings.push(listingRow);
         survivors.push(item);
         results.push({
           mlsNumber: item.mlsNumber,
@@ -432,6 +445,7 @@ async function processQueue() {
         continue;
       }
       if (!marketEligible) {
+        if (listingRow) skippedListings.push(listingRow);
         results.push({
           mlsNumber: item.mlsNumber,
           action: "skip_not_str_market",
@@ -506,22 +520,22 @@ async function processQueue() {
       const evalPath = inferEvalPath(item.mlsNumber);
       await writeFile(evalPath, `${JSON.stringify(evalData, null, 2)}\n`);
 
-      if (!current.evaluationExists) {
-        pendingEvaluations.push({
-          data: evalData,
-          flags: {
-            source: "new_listing",
-            status: "pending_review",
-            version: "1",
-          },
-        });
-      }
-
       pendingPosts.push({
         item,
         address: evalData.address || item.displayAddress || item.mlsNumber,
         region,
         mediumRevenue: projections.medium.revenue,
+        listingRow,
+        evaluation: current.evaluationExists
+          ? null
+          : {
+            data: evalData,
+            flags: {
+              source: "new_listing",
+              status: "pending_review",
+              version: "1",
+            },
+          },
       });
     } catch (error) {
       survivors.push(item);
@@ -533,27 +547,34 @@ async function processQueue() {
     }
   }
 
-  try {
-    if (pendingListings.length > 0) {
-      await appendSheetRows("Listings", pendingListings);
-    }
-    if (pendingEvaluations.length > 0) {
-      await writeEvaluationVersionsBatch(pendingEvaluations);
-    }
-  } catch (error) {
-    for (const pending of pendingPosts) {
-      survivors.push(pending.item);
+  // Listing rows for skipped/held items. Upsert rather than insert: an MLS # can
+  // already be in the table (a hold re-queues every cycle), and a plain insert
+  // would reject the whole batch on that one duplicate key.
+  if (skippedListings.length > 0) {
+    try {
+      await upsertSheetRows("Listings", skippedListings);
+    } catch (error) {
+      // Nothing downstream depends on these — record it and keep going rather
+      // than failing listings that are ready to post.
       results.push({
-        mlsNumber: pending.item.mlsNumber,
-        action: "failed",
+        action: "skipped_listing_write_failed",
+        count: skippedListings.length,
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    pendingPosts.length = 0;
   }
 
   for (const pending of pendingPosts) {
     try {
+      // Write + post inside one try per listing. A failure here re-queues this
+      // listing only; the rest of the cycle is unaffected.
+      if (pending.listingRow) {
+        await upsertSheetRows("Listings", [pending.listingRow]);
+      }
+      if (pending.evaluation) {
+        await writeEvaluationVersionsBatch([pending.evaluation]);
+      }
+
       const reviewPost = spawnSync("npx", ["tsx", "scripts/workflows/handle-new-eval.ts", "--mls", pending.item.mlsNumber, "--channel", channel], {
         cwd: repoRoot,
         env: process.env,
