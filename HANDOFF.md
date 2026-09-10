@@ -4,7 +4,119 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-08-10 — recovered from a 4-day silent stall
+## Current status — 2026-09-10 — FlexMLS account switch + stalled-listing outreach (in progress)
+
+Two things happened this session: the **FlexMLS credentials moved from Cameron Brockbank to
+Erik**, and a new **stalled-listing agent outreach** batch script was started (paused
+mid-build, see below).
+
+### FlexMLS credential switch — DONE, verified on both machines
+
+The bot now authenticates as Erik's own PCBR subscription (member `tech_id`
+`20260908211722139028000000`, created 2026-09-08). Erik updated `FLEXMLS_USERNAME` /
+`FLEXMLS_PASSWORD` in `.env` on **both** the Mini and this laptop — those two vars are the
+only place the credentials live (not `.hermes.env`, not the launchd plists).
+
+**The step that actually mattered: deleting the browser profiles.** A persistent profile
+holds a live FlexMLS session, so the watcher kept scanning happily **as Cameron** after the
+credential change — correct-looking data under the wrong identity, with no error. The Mini's
+`.playwright/flexmls-profile` was deleted and the watcher kickstarted, which forced a real
+re-login; it hit the 2FA/trusted-device block, posted the Slack alert, and Erik submitted the
+code. **If credentials ever change again, deleting the profiles is mandatory, not optional.**
+
+- 2FA now goes to the number ending **9889** (Cameron's was **8899**) — a useful tell for
+  which account a login is actually using.
+- `.playwright/flexmls-stalled-profile` (this laptop) is re-established and device-trusted.
+- `.playwright/flexmls-on-demand-profile` and `zillow-profile` were NOT touched. The
+  on-demand profile is 0B/stale and will need the same treatment on first use.
+- Stored `listing_url`s were checked and are **safe**: 1,354 of 1,360 use the canonical
+  `flexmls.com/share/<code>/…` form, which is not tied to an agent slug. Only 1 row points
+  at a `CameronBrockbank` share link. No link-rot cleanup needed.
+- Still unconfirmed: a post-restart `heartbeat loggedIn=true` line in `/tmp/str-mls-watch.log`
+  on the Mini. Worth a `grep heartbeat /tmp/str-mls-watch.log | tail -3` to close out.
+
+### ⚠️ Latent bug found in `scripts/watch-mls.ts` — NOT fixed
+
+`looksLoggedIn()` (~line 727) treats a `pc.flexmls.com` hostname match as proof of a session:
+
+```ts
+if (url.includes("pc.flexmls.com") || url.includes("mainmenu") || url.includes("search/")) return true;
+```
+
+**The sign-in page is served from that same host**, so this returns `true` while the browser
+is sitting on the login form. Downstream steps then fail somewhere far from the cause (seen
+live: a "could not find the saved search" error when the page was actually the sign-in form).
+The fixed version — check for a sign-in form first, treat it as authoritative false, and only
+count real in-app markers (`QuickLaunch`, `Change Search Template`, `Results:`,
+`private_dashboard`) — is in `scripts/stalled-outreach.ts` and could be ported. Left alone
+here because the scanner was explicitly out of scope this session and is working.
+
+### Stalled-listing outreach batch — script written, blocked on the saved search
+
+New workstream, deliberately narrow: find FlexMLS listings active **60+ days** that are
+STR-eligible, and produce a CSV for **manual** HubSpot import. The pitch is "rent it while
+it's listed". **No revenue evaluations, no HubSpot code, no changes to the scanner or the
+approve handler** — all three were explicit constraints from Erik.
+
+`scripts/stalled-outreach.ts` (new, **uncommitted**, typechecks clean) is the only file:
+
+```bash
+npx tsx scripts/stalled-outreach.ts --login-check   # verify credentials, report identity
+npx tsx scripts/stalled-outreach.ts --discover      # navigate + dump, write nothing
+npx tsx scripts/stalled-outreach.ts                 # the monthly run -> CSV
+```
+
+CSV columns: `mls_number, address, city, list_price, dom, agent_name, brokerage, agent_email,
+agent_phone, prior_evaluation`. Flow: open the saved search → read the grid → join Supabase by
+MLS number for agent email/phone we already hold → pull business cards only for the gaps →
+write `data/stalled-outreach-<date>.csv`.
+
+Design decisions worth keeping:
+
+- **Own profile** `.playwright/flexmls-stalled-profile`, so it never contends with the
+  always-on watcher (Chromium locks a profile dir; two processes cannot share one).
+- **Columns are read by `column_<name>` class, not position**, using the header's
+  `data-column-name`. Reordering columns in the FlexMLS display template will not break it.
+- **`ensureSignedIn()` is an escalating state machine**, not a one-shot login. The PCR portal
+  home renders **no FlexMLS link at all** for Erik's account, so direct navigation to
+  `FLEXMLS_OPENID_URL` is tried first and the portal click is a fallback. Retrying the portal
+  click is a livelock — it was one, for 8 iterations.
+- **Never declare a named function expression inside `page.evaluate()`.** tsx/esbuild compiles
+  `const clean = (v) => …` into a call to its `__name` helper, which does not exist in the
+  page: `ReferenceError: __name is not defined`. Inline the logic instead.
+- `watch-mls.ts` exports nothing (it is a process, not a module), so login/surface helpers are
+  adapted copies. Same precedent as `normalizeNightlyRentalAllowed`, already duplicated in
+  `underwrite.ts` and `process-mls-review-queue.ts`.
+
+**BLOCKED / next step:** saved searches are per-user, so the "Stalled STR" search built under
+Cameron's login **did not carry over** and must be rebuilt under Erik's account (the dashboard
+Saved Searches gadget currently reads "No results for your criteria"). Erik paused here.
+
+When rebuilding it:
+
+1. Criteria: Status **Active**, **Nightly Rental Allowed = Yes**, our areas. The DOM ≥ 60
+   filter is optional — the script can cut in code — but Status and Nightly Rental Allowed
+   must be in the search.
+2. **Add a DOM column to the display template.** Erik's account has `cdom_enabled = true`,
+   `adom_enabled = false`. The first build had neither DOM nor CDOM, which forces the script
+   onto its weaker fallback (Supabase `listing_date`, which only covers listings the watcher
+   has already seen).
+3. Name it exactly `Stalled STR`, confirm it appears in the dashboard gadget, then run
+   `--discover`.
+
+**Unresolved from the first discovery run** (9/4, under Cameron's account): the search
+reported **446 matches** but only **100 rows** rendered — the grid lazy-loads via a
+`#morelistingsbot` sentinel. A patient scroll/`Load More` loop with a match-count cross-check
+was written but has **never been exercised against a real multi-page grid**. 446 was also far
+above the ~242 Supabase estimate, consistent with the DOM filter not being on the search.
+
+## Previous status — 2026-08-10 — recovered from a 4-day silent stall
+
+> **Related:** the `looksLoggedIn` fix in the 2026-09-10 section above is a third instance
+> of the pattern this section describes — a service reporting health while doing no work.
+> The watcher logged `heartbeat loggedIn=true` with `hotSheet=0 parsed=0/0` while parked on
+> the SSO login page. Worth assuming there are more: a signal that only ever means "the
+> process is alive" is not a health check.
 
 The bot had been queuing listings without evaluating or posting them since **Aug 6**.
 Two *independent* failures, neither of which crashed anything — both services stayed
@@ -365,6 +477,11 @@ ids to target). Run it with `.env` loaded:
 
 ## Gotchas worth remembering
 
+- **A credential change is not live until the browser profiles are deleted.** A persistent
+  Playwright profile holds the old session, so the bot keeps working as the *previous* user
+  with no error to tell you. See the 2026-09-10 section.
+- **Never declare a named function expression inside `page.evaluate()`** — tsx/esbuild
+  rewrites it into its `__name` helper, which does not exist in the page.
 - Test the bot on **fresh Slack threads**, not ones with a history of failed turns —
   failed-turn memory can re-confuse the agent (seen as `invalid_blocks` / oversized
   approval cards while it thrashed mid-migration; cleared on a clean session).
