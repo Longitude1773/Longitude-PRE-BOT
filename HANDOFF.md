@@ -35,6 +35,81 @@ code. **If credentials ever change again, deleting the profiles is mandatory, no
 - Still unconfirmed: a post-restart `heartbeat loggedIn=true` line in `/tmp/str-mls-watch.log`
   on the Mini. Worth a `grep heartbeat /tmp/str-mls-watch.log | tail -3` to close out.
 
+### Gateway model outage — `gpt-5.5` (FIXED, and it will recur)
+
+Mid-session the Slack bot started replying **"The model provider failed after retries"** to
+every mention. Initial projections still posted, because `handle-new-eval.ts` underwrites
+deterministically from `market-knowledge.md` with no LLM — **only the conversational paths
+(adjustments, pasted links) broke.** That split is the tell for a model-layer failure.
+
+The real error, only in `/tmp/str-bot-gateway.log`:
+
+```
+provider=openai-codex base_url=https://chatgpt.com/backend-api/codex model=gpt-5.4
+HTTP 400: {"detail":"The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account."}
+```
+
+Not auth — the token was healthy. Three compounding causes:
+
+1. **`LLM_MODEL` in `.hermes.env` is dead config.** It read `openai/codex-5.4-medium` and
+   `ANCHOR.md` documented it as the model, but the framework has not read that var since
+   March 2026. `~/.hermes/config.yaml` → `model.default` is authoritative, and it held
+   `gpt-5.4`. ANCHOR.md has been corrected.
+2. **The framework invents model names.** `_FORWARD_COMPAT_TEMPLATE_MODELS` in
+   `hermes_cli/codex_models.py` surfaces a *synthetic* newer slug whenever an older
+   relative is present, so `gpt-5.4` could be written to config for an account that never
+   had it.
+3. **No fallback.** OpenRouter and Nous auxiliary providers are both unavailable
+   (`payment / credit error`, `no Nous authentication found`), so a main-model failure is
+   fatal rather than degraded. Worth fixing if the bot ever needs to survive this alone.
+
+**Fix: pick from live discovery, never from the framework's list.** Run on the gateway host
+(stdlib only — system `python3` has no `httpx`; the venv at
+`~/.hermes/hermes-agent/venv/bin/python` does):
+
+```bash
+python3 -c "
+import json, os, urllib.request, urllib.error
+d = json.load(open(os.path.expanduser('~/.hermes/auth.json')))
+tok = d['credential_pool']['openai-codex'][0]['access_token']
+req = urllib.request.Request(
+    'https://chatgpt.com/backend-api/codex/models?client_version=1.0.0',
+    headers={'Authorization': 'Bearer ' + tok})
+try:
+    with urllib.request.urlopen(req, timeout=10) as r:
+        for m in json.load(r).get('models', []):
+            print(' ', m.get('slug'), '| api:', m.get('supported_in_api'), '| vis:', m.get('visibility'))
+except urllib.error.HTTPError as e:
+    print('HTTP', e.code, e.read()[:300].decode())
+"
+```
+
+On 2026-09-10 the account returned: `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`,
+`gpt-5.6-luna`, `gpt-5.5` (plus hidden `gpt-reserve` / `codex-auto-review`, which discovery
+filters out). Note **none of the framework's built-in Codex names were available** — the
+documented `codex-5.4-medium` and the obvious fallback `gpt-5.3-codex` would both have
+failed. Discovery is not optional here.
+
+**Chose `gpt-5.5`**: the only available slug with real entries in
+`agent/model_metadata.py` (272k context on the Codex path). The `gpt-5.6-*` and
+`gpt-6-astra` slugs are newer than this Hermes build and would fall back to a *guessed*
+256k context. `gpt-6-astra` is top of the account's priority list and is the upgrade to try
+next, as its own change so a regression is attributable.
+
+```bash
+cp ~/.hermes/config.yaml ~/.hermes/config.yaml.bak
+sed -i '' 's/^  default: gpt-5.4$/  default: gpt-5.5/' ~/.hermes/config.yaml
+launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.gateway
+```
+
+Verified live: an adjustment ("set balanced revenue to 76500") applied correctly with the
+locked spread (103,275 / 57,375). The gateway also auto-raised compaction to 85% for the
+272k window — informational, opt out with
+`hermes config set compression.codex_gpt55_autoraise false`.
+
+**This will recur.** Slugs rotate, `config.yaml` is static, and the symptom is a bot that
+talks but cannot think. First move is always the discovery one-liner above.
+
 ### ⚠️ Latent bug found in `scripts/watch-mls.ts` — NOT fixed
 
 `looksLoggedIn()` (~line 727) treats a `pc.flexmls.com` hostname match as proof of a session:

@@ -31,9 +31,20 @@ Start both with `npm run str:start`; gateway only with `npm run hermes:start`. L
 
 - **Language/runtime:** TypeScript executed with **tsx** on Node (no build step). CLI
   utilities in `scripts/`, multi-step flows in `scripts/workflows/`.
-- **LLM:** `openai/codex-5.4-medium` via the **ChatGPT Codex backend**
-  (`provider: openai-codex`), authenticated by `~/.hermes/auth.json` — **not** an
-  `OPENAI_API_KEY`. `.env` holds no LLM key by design.
+- **LLM:** a Codex model via the **ChatGPT Codex backend** (`provider: openai-codex`),
+  authenticated by `~/.hermes/auth.json` — **not** an `OPENAI_API_KEY`. `.env` holds no
+  LLM key by design.
+  - **The model name lives in `~/.hermes/config.yaml` (`model.default`) and nowhere else.**
+    `LLM_MODEL` in `.hermes.env` is **dead config** — the framework stopped reading it in
+    March 2026 ("config.yaml is the sole source of truth"; see `cli.py`, and the v12→13
+    migration in `hermes_cli/config.py` that clears the var). Do not trust it; it can and
+    does disagree with what is actually being sent.
+  - Codex model slugs **rotate**, and a stale one is a hard outage: every model call fails
+    `HTTP 400 "The '<model>' model is not supported when using Codex with a ChatGPT
+    account."` Worse, the framework's `_FORWARD_COMPAT_TEMPLATE_MODELS` invents
+    *synthetic* slugs (e.g. `gpt-5.4`) whenever an older relative exists, so a name can be
+    written to config that the account never had. Always pick from live discovery — see
+    `HANDOFF.md` (2026-09-10) for the one-liner.
 - **Database:** **Supabase Postgres**, 5 tables — `Listings`, `Evaluations`,
   `Monthly Projections`, `Comparables`, `Adjustments`. Accessed via `scripts/sheets.ts`,
   which keeps sheet-style table names for backward compatibility (the project began on
