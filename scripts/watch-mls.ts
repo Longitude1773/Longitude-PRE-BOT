@@ -724,12 +724,65 @@ async function isPortalHome(page: Page) {
   return url.includes("portal.parkcityrealtors.com/home") || (body.includes("Resources & Services") && body.includes("FLEXMLS"));
 }
 
+/**
+ * True only for a URL that belongs to a logged-in FlexMLS surface.
+ *
+ * Matching the raw URL string is not safe: the SSO handshake hops carry
+ * `pc.flexmls.com` inside their query string (as `client_id` and
+ * `redirect_uri`), so a bare `url.includes("pc.flexmls.com")` reports a live
+ * session while sitting on the identity provider's login page. Seen in
+ * production 2026-09-10: a heartbeat logged `loggedIn=true` on
+ * `sso.tangilla.com/auth/realms/…?client_id=pc.flexmls.com&…` and scraped
+ * nothing (`hotSheet=0 parsed=0/0`). Parse the URL and judge host + path only.
+ */
+function isLoggedInFlexUrl(rawUrl: string) {
+  if (!rawUrl) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+
+  // Identity provider / OpenID handshake hops are not a session.
+  if (host.endsWith("sso.tangilla.com")) return false;
+  if (path.includes("/openid_rp")) return false;
+  if (!host.endsWith("flexmls.com")) return false;
+
+  return (
+    path.includes("mainmenu.cgi") ||
+    path.includes("/cgi-bin/") ||
+    path.includes("/search/") ||
+    path.includes("private_dashboard")
+  );
+}
+
+/** True when a FlexMLS sign-in form is on screen. */
+async function showsSignInForm(page: Page) {
+  const body = await page.locator("body").innerText().catch(() => "");
+  if (/sign in to your account|reset password/i.test(body)) return true;
+  return await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+}
+
 async function looksLoggedIn(page: Page) {
+  // A visible sign-in form is authoritative: whatever the URL says, there is
+  // no session. Without this the caller "succeeds" into a no-op scan.
+  if (await showsSignInForm(page)) return false;
+
   const surface = await findFlexSurface(page);
-  const url = surfaceUrl(surface);
   const body = await surfaceBodyText(surface);
-  if (url.includes("pc.flexmls.com") || url.includes("mainmenu") || url.includes("search/")) return true;
-  return body.includes("QuickLaunch") || body.includes("MLS # Search") || body.includes("Change Search Template") || body.includes("Hot Sheet For") || body.includes("New Listings (");
+  if (
+    body.includes("QuickLaunch") ||
+    body.includes("MLS # Search") ||
+    body.includes("Change Search Template") ||
+    body.includes("Hot Sheet For") ||
+    body.includes("New Listings (")
+  ) {
+    return true;
+  }
+  return isLoggedInFlexUrl(surfaceUrl(surface));
 }
 
 async function drainCommands(types?: Array<MlsCommand["type"]>) {
