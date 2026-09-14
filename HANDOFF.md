@@ -4,7 +4,166 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-09-10 — FlexMLS account switch + stalled-listing outreach (in progress)
+## Current status — 2026-09-11 — gateway outage: silent model rejection + dropped Slack events
+
+> Written 2026-09-14 from the 09-11 session. Two *independent* faults hit the gateway on
+> the same day, and they look identical from Slack (the bot goes quiet). Both are fixed;
+> the diagnosis took hours mostly because of the logging gotchas in "How to read this log"
+> below. Read that part first next time.
+
+**Symptom both times:** mention the bot in a thread, get nothing back — no reply, no
+`Working` progress line, no error in-thread. The MLS watcher kept posting new listings
+normally throughout, because `handle-new-eval.ts` underwrites with no LLM. **That split
+(watcher fine / conversation dead) is the tell for a gateway-side fault**, same as the
+2026-08-10 and 2026-09-10 incidents.
+
+### Fault 1 (morning) — Codex silently black-holing `gpt-5.5`
+
+A *second* model failure mode, distinct from 2026-09-10's loud one. Yesterday's was
+`HTTP 400 "model is not supported"`. This one accepts the connection and then returns
+nothing at all:
+
+```
+WARNING agent.chat_completion_helpers: Non-streaming API call stale for 1039s (threshold 600s). model=gpt-5.5 context=~48,164 tokens. Killing connection.
+WARNING agent.chat_completion_helpers: Codex stream produced no SSE events for 138s after first byte (threshold 60s, model=gpt-5.5)
+... Codex backend appears to be silently rejecting 'gpt-5.5' ... known backend-side pattern
+    that has affected ChatGPT Plus accounts intermittently.
+```
+
+**Live discovery does not catch this.** The discovery one-liner (2026-09-10 section) still
+reported `gpt-5.5 | api: True | vis: list` while every request to it was being dropped.
+So "always pick from live discovery" is necessary but **not sufficient** — discovery proves
+a slug is *offered*, not that it *answers*.
+
+- **Tell:** `stale for NNNs` / `no SSE events` in the log, with **no** HTTP status.
+- **Do NOT follow the error's own advice.** It suggests "try `gpt-5.4`" — that is the exact
+  slug that returns HTTP 400 on this account (see 2026-09-10). Wrong for us.
+- **Fix applied:** `model.default` → **`gpt-6-astra`** (top of the account's priority list,
+  nominated in ANCHOR.md as the next upgrade). Verified: 66s approve→PDF immediately after.
+
+`streaming.enabled: false` in config is **why this was so silent** — with streaming off the
+gateway waits for a complete response, so a dead backend costs the full ~17 min timeout
+before anything is logged. With streaming on, the `no SSE events` check would surface the
+same failure in ~60s. Worth considering; not changed.
+
+**Model config lives in two files and they agreed:** `~/.hermes/config.yaml` *and*
+`<repo>/.hermes-runtime/config.yaml` (the "Runtime config file" named in the startup
+banner) both hold `model.default`. Editing only the former worked, but check both if a
+model change ever appears not to take.
+
+### Fault 2 (afternoon) — Slack Socket Mode dropping events
+
+After the model fix the bot worked 12:00–12:03, then went silent again at 13:33. This was
+**not** the model: zero `gpt-6-astra` errors, config correct, single healthy process.
+
+**Slack events were being dropped outright.** The 13:33 adjustment got no reply and left no
+log line at all; the *identical text* re-sent after a kickstart was answered in **24s**.
+Same gateway, same model, same thread — only a fresh socket differed.
+
+```
+WARNING hermes_plugins.slack_platform.adapter: [Slack] Socket Mode unhealthy (transport disconnected); reconnecting
+```
+
+4 of these since the 11:57 restart, the most recent being the last line in the log. A
+reconnect that fails to re-subscribe silently loses `app_mention` events. **Fix: kickstart
+the gateway.** No durable fix yet — see Outstanding.
+
+### ⚠️ How to read this log (three traps that cost hours)
+
+1. **`grep -c 'Session is closed'` is WRONG for this build.** It returns `0` while the
+   socket is actively cycling. The 2026-08-10 section and the 2026-07-06 runbook both
+   document that string; it gave a false all-clear on 09-11. **The real string is
+   `Socket Mode unhealthy`.** Sample it twice 30s apart as before.
+2. **The log records only warnings and errors — successful turns write NOTHING.** A
+   working PDF generation leaves no trace. So *absence of `tool_executor` / `conversation_loop`
+   lines is not evidence that nothing ran.* Several wrong conclusions on 09-11 came from
+   exactly this.
+3. **The log has no timestamps**, so ordering must be inferred from position in the file.
+   Combined with (2) this makes "what happened when" nearly unanswerable. Adding timestamps
+   is the highest-value fix on the Outstanding list.
+
+Also: `grep` patterns matching `app_mention` will match the **`missing_scope` spam** (the
+scope string literally contains `app_mentions:read`), which floods `tail`. Always filter:
+
+```bash
+grep -vE "missing_scope|channel_directory|server responded" /tmp/str-bot-gateway.log | tail -40
+```
+
+That `missing_scope: groups:read` line repeats every few seconds forever — a channel-directory
+retry against a call the bot token can never satisfy. Harmless but it drowns the log.
+
+### Response-latency baseline (measured across all 356 channel threads)
+
+Useful for judging "is it slow or is it dead" — **it is never slow, it either answers in
+seconds or not at all**:
+
+| month | n | median first reply | approve→PDF median |
+|---|---|---|---|
+| 2026-06 | 351 | 18.5s | 21.1s |
+| 2026-07 | 99 | 16.1s | 19.0s |
+| 2026-08 | 178 | 13.1s | 15.9s |
+| 2026-09 | 19 | 3.2s | 16.9s |
+
+A stalled gateway should be suspected after ~60s of silence, not tolerated for minutes.
+
+### Session auto-reset ate an approval
+
+The 09-11 thread had been idle since 07-06, so `session_reset` (`mode: both`,
+`idle_minutes: 1440`) fired and posted the "Session automatically reset" notice. The notice
+itself is cosmetic — the message is still processed (`gateway/run.py` ~6192-6250 prepends a
+`[System note: …expired…]` and dispatches normally). **But the reset cleared the thread
+context**, so the agent had to re-read everything (4.5 min instead of ~15s), and a queued
+`evaluate <link>` request from the same window was serviced *after* the user's `approve`,
+re-posting the review and flipping the row back to `posted` — **discarding the approval**.
+
+`idle_minutes: 1440` is tuned for chat, not for a review queue where threads legitimately
+sit for weeks awaiting approval. Raising it (or setting `session_reset.notify: false`) is on
+the Outstanding list, **not yet done**.
+
+### ⚠️ OPEN BUG — approve resolved to the wrong version (`V2` instead of `V3`)
+
+On MLS **12603066** (6542 Purple Poppy Lane) the approve path flipped the **superseded**
+row instead of the current one. Current live state, **left as-is pending a decision**:
+
+```
+V1  posted    med=130,000  pdf: ''
+V2  approved  med= 82,500  pdf: '2026/07/06/6542-purple-poppy-lane-park-city-ut-84098.pdf'   <- WRONG ROW
+V3  posted    med= 78,500  pdf: ''                                                            <- the real eval
+```
+
+The **PDF itself is correct** ($106,000 / $78,500 / $58,900 — verified by rendering it).
+The render reads `data/eval-<mls>.json` via `loadEvalData()`, independent of which row is
+resolved, so only the row bookkeeping is wrong. Proof the wrong row was used: the R2 key is
+under a `2026/07/06/` prefix, and `r2KeyForEval` builds that from `row["Created At"]` —
+only V2 has a July date.
+
+Unexplained: `pickLatestEvaluation` (`lib.ts:307`) sorts by `Version` descending and V3's
+`Slack Timestamp` matches the thread, so `resolveEvaluationByThread` should have returned V3.
+**This will recur on any multi-version eval.** The adjustment path is fine — a same-day
+adjustment on MLS 12604162 versioned correctly (V2 `pending_review`, latest).
+
+Consequence if left: the PRE site reads `pdf_path` off V2 (whose numbers don't match the
+document), and V3's empty `pdf_path` reads as "needs regeneration" per the R2 contract.
+
+**Proposed fix (NOT applied, awaiting go-ahead):** set V3 `Status=approved` +
+`PDF Path=2026/07/06/6542-purple-poppy-lane-park-city-ut-84098.pdf`; set V2 back to
+`pending_review` with empty `PDF Path`. Reuses the existing R2 object (content is right,
+only the date prefix is odd).
+
+### Timeline (2026-09-11, MT)
+
+| time | event |
+|---|---|
+| 11:06 | adjustment → session auto-reset notice; processed anyway |
+| 11:11 | projections updated to $78,500 (V3 written) |
+| 11:12–11:22 | three `approved` messages — all silently lost to the `gpt-5.5` black-hole |
+| ~11:57 | `model.default` → `gpt-6-astra`, gateway kickstart |
+| 12:00 | `approved` → PDF in **66s** (filed against V2, see open bug) |
+| 12:03 | photo re-fetch + PDF re-render, worked |
+| 13:33 | adjustment — **dropped**, no reply, no log line |
+| ~13:57 | kickstart; identical message answered in **24s** |
+
+## Previous status — 2026-09-10 — FlexMLS account switch + stalled-listing outreach (in progress)
 
 Two things happened this session: the **FlexMLS credentials moved from Cameron Brockbank to
 Erik**, and a new **stalled-listing agent outreach** batch script was started (paused
@@ -266,6 +425,10 @@ The signal that actually distinguishes the two states is the reconnect loop in t
 grep -c 'Session is closed' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' /tmp/str-bot-gateway.log
 ```
 
+> ⚠️ **2026-09-11: `Session is closed` no longer appears in this build.** It returns `0`
+> while the socket is actively cycling — it gave a false all-clear during the 09-11 outage.
+> The current string is **`Socket Mode unhealthy`**; see the 2026-09-11 section.
+
 Same trap on the pipeline side: the watcher logs `queue processor { ok: true, ... }` even
 when every listing inside failed. **`ok: true` refers to the run, not the listings** — read
 `actionCounts` for `failed`.
@@ -433,8 +596,10 @@ launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.longitude.pre-bot.gateway
 python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))['platforms']['slack'];print(d['state'], d['updated_at'])"
 
 # the real check — is it stuck in the reconnect loop? sample twice; a climbing count
-# means the socket is dead and only a kickstart will fix it.
-grep -c 'Session is closed' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' /tmp/str-bot-gateway.log
+# means the socket is dropping events and only a kickstart will fix it.
+# NOTE (2026-09-11): the string is 'Socket Mode unhealthy'. The older 'Session is closed'
+# does not appear in this build and returns 0 even while the socket is cycling.
+grep -c 'Socket Mode unhealthy' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Socket Mode unhealthy' /tmp/str-bot-gateway.log
 
 tail -f /tmp/str-bot-gateway.log   # and /tmp/str-mls-watch.log
 ```
@@ -512,13 +677,31 @@ Everything below is done and verified:
         (`strApproved`) queue item older than ~2h. The watcher already parses
         `actionCounts` in `processReviewQueue()`, so this is a few lines there. Dedup via
         the same pattern as `data/inbox/mls-approval-alert-state.json`.
-      - *gateway:* a climbing `Session is closed` count in `/tmp/str-bot-gateway.log`.
-        **Do not** use `gateway_state.json` freshness — it only writes on state changes,
-        so a healthy long-lived connection looks identical to a dead one.
+      - *gateway:* a climbing `Socket Mode unhealthy` count in `/tmp/str-bot-gateway.log`
+        (**updated 2026-09-11** — `Session is closed` does not exist in this build and
+        returns 0 while the socket is cycling). **Do not** use `gateway_state.json`
+        freshness — it only writes on state changes, so a healthy long-lived connection
+        looks identical to a dead one.
+      - *gateway, stronger signal:* an unanswered `app_mention`. On 09-11 two separate
+        faults both presented as mentions that got no reply and left **no log line at all**.
+        A check that compares recent mentions against recent bot replies in the same thread
+        would have caught both within a minute; nothing else did.
 
       Both alert via outbound Slack (`scripts/slack.ts`, Web API), which kept working
       through both failures. Residual gap: if outbound Slack itself breaks, nothing can
       reach you — would need email/push, probably not worth it yet.
+- [ ] **Timestamp the gateway log** — every 2026-09-11 diagnosis was slowed by an
+      untimestamped, warnings-only log; ordering had to be inferred from file position.
+      Highest-leverage debuggability fix.
+- [ ] **Fix the V2-over-V3 approve resolution bug** — see the 2026-09-11 section. Live
+      mis-filed rows on MLS 12603066 are still uncorrected (proposed fix specced there,
+      not applied). Will recur on any multi-version eval.
+- [ ] **Re-tune `session_reset`** — `idle_minutes: 1440` is chat-tuned and cost an approval
+      on 09-11 when a long-idle review thread reset mid-request. Raise it substantially, or
+      set `session_reset.notify: false`.
+- [ ] **Consider `streaming.enabled: true`** — with streaming off, a silent backend costs
+      the full ~17 min timeout before anything is logged; streaming surfaces the same
+      failure via the `no SSE events` check in ~60s.
 - [ ] **Teach `deploy-pull.sh` about the data layer** — it infers restarts from
       `watch-mls.ts` / `browser-runtime.ts` only, but the watcher also imports
       `scripts/sheets.ts` → `scripts/supabase.ts` in its long-lived process. A change to

@@ -24,8 +24,20 @@ posts as production.
    warm browser session and scans the FlexMLS hot-sheet on a schedule (Mountain-Time
    window, default 07:00–19:00), plus services on-demand eval requests.
 
-Start both with `npm run str:start`; gateway only with `npm run hermes:start`. Logs:
-`/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
+**On the Mini (production) both are supervised by launchd — do NOT start them by hand.**
+`npm run str:start` / `npm run hermes:start` would spawn a *second* gateway alongside the
+launchd one; two gateways on the same Slack app double-respond and fight each other for
+Socket Mode events. Use `launchctl` instead:
+
+```bash
+launchctl list | grep longitude.pre-bot                              # status (PID + last exit)
+launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.gateway    # restart gateway
+launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.watcher    # restart watcher
+```
+
+The `npm run` scripts remain the right entry point on a **dev machine** with no launchd
+agents loaded. Logs (both cases): `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
+See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surface.
 
 ## Stack decisions (the "why")
 
@@ -34,7 +46,7 @@ Start both with `npm run str:start`; gateway only with `npm run hermes:start`. L
 - **LLM:** a Codex model via the **ChatGPT Codex backend** (`provider: openai-codex`),
   authenticated by `~/.hermes/auth.json` — **not** an `OPENAI_API_KEY`. `.env` holds no
   LLM key by design.
-  - **The model name lives in `~/.hermes/config.yaml` (`model.default`) and nowhere else.**
+  - **The model name lives in `config.yaml` (`model.default`) — not in any env var.**
     `LLM_MODEL` in `.hermes.env` is **dead config** — the framework stopped reading it in
     March 2026 ("config.yaml is the sole source of truth"; see `cli.py`, and the v12→13
     migration in `hermes_cli/config.py` that clears the var). Do not trust it; it can and
@@ -45,6 +57,17 @@ Start both with `npm run str:start`; gateway only with `npm run hermes:start`. L
     *synthetic* slugs (e.g. `gpt-5.4`) whenever an older relative exists, so a name can be
     written to config that the account never had. Always pick from live discovery — see
     `HANDOFF.md` (2026-09-10) for the one-liner.
+  - **Discovery is necessary but NOT sufficient.** A slug can be listed and still be dead:
+    on 2026-09-11 the Codex backend *silently* black-holed `gpt-5.5` — connection accepted,
+    no stream events, no error, ~17 min timeout — while discovery kept reporting it
+    `api: True | vis: list`. So there are two model failure modes, and they look nothing
+    alike in the log: a **loud** one (`HTTP 400 "not supported"`) and a **silent** one
+    (`stale for NNNs` / `no SSE events`, no HTTP status). Discovery catches only the first.
+    Do not trust the silent one's own suggested workaround either — it recommends `gpt-5.4`,
+    which is the slug that 400s on this account. See `HANDOFF.md` (2026-09-11).
+  - The model name is also mirrored into `<repo>/.hermes-runtime/config.yaml` (the
+    "Runtime config file" in the gateway's startup banner). They agreed on 2026-09-11, but
+    check both if a model change ever appears not to take.
 - **Database:** **Supabase Postgres**, 5 tables — `Listings`, `Evaluations`,
   `Monthly Projections`, `Comparables`, `Adjustments`. Accessed via `scripts/sheets.ts`,
   which keeps sheet-style table names for backward compatibility (the project began on
