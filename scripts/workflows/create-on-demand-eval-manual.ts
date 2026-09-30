@@ -76,13 +76,16 @@ async function main() {
   const url = argValue("--url");
   const channel = argValue("--channel") || process.env.SLACK_CHANNEL_ID;
   const threadTs = argValue("--thread-ts");
+  // One line shown above the review post, e.g. the open-house tracker's
+  // "📅 Open house · Wed 10/7 · 10:00 AM–1:00 PM". Display only.
+  const label = argValue("--label")?.trim() || "";
   const forcePost = process.argv.includes("--force-post");
   const dryRun = process.argv.includes("--dry-run");
   const enableWebResearch =
     process.argv.includes("--web-research") ||
     (!process.argv.includes("--no-web-research") && envFlag("UNDERWRITE_WEB_RESEARCH_ENABLED", true));
 
-  if (!url) throw new Error("Usage: tsx scripts/workflows/create-on-demand-eval-manual.ts --url <listing-url> [--channel <id>] [--thread-ts <ts>] [--force-post] [--web-research|--no-web-research] [--dry-run]");
+  if (!url) throw new Error("Usage: tsx scripts/workflows/create-on-demand-eval-manual.ts --url <listing-url> [--channel <id>] [--thread-ts <ts>] [--label <text>] [--force-post] [--web-research|--no-web-research] [--dry-run]");
   if (!channel) throw new Error("Missing --channel or SLACK_CHANNEL_ID.");
   if (!isZillowUrl(url) && !isFlexMlsUrl(url)) throw new Error("Expected a Zillow or FlexMLS listing URL.");
   const isZillowRequest = isZillowUrl(url);
@@ -250,7 +253,8 @@ async function main() {
       throw new Error(`Could not resolve evaluation for ${listingId} before posting to Slack.`);
     }
     const active = resolved;
-    const text = await buildReviewMessage(active.data);
+    const reviewText = await buildReviewMessage(active.data);
+    const text = label ? `${label}\n${reviewText}` : reviewText;
 
     if (threadTs) {
       await reply(channel, threadTs, text);

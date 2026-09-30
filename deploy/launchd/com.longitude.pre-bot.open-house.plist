@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.longitude.pre-bot.open-house</string>
+
+  <!-- Weekly open-house tracker. One run, then exit (no KeepAlive).
+       The script is idempotent: Tuesday creates the sheet, Wednesday's run of
+       the same command adds late open houses and fills new PRE links. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/npx</string>
+    <string>tsx</string>
+    <string>scripts/open-house-tracker.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/erikmikkelsen/projects/Longitude-PRE-BOT</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/erikmikkelsen</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Local clock time — the Mini must be set to America/Denver.
+       Weekday: 2 = Tuesday, 3 = Wednesday. A time missed while asleep runs on wake. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Weekday</key><integer>2</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>3</integer>
+      <key>Hour</key><integer>8</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/str-open-house.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/str-open-house.log</string>
+</dict>
+</plist>

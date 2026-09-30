@@ -52,6 +52,22 @@ launchctl bootout      gui/$(id -u)/com.longitude.pre-bot.gateway   # stop until
 
 Logs: `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
 
+## Weekly open-house tracker (`com.longitude.pre-bot.open-house.plist`)
+
+A scheduled job, not a service: runs `scripts/open-house-tracker.ts` at **Tue 15:00** and
+**Wed 08:00** local time and exits (no `KeepAlive`). The Mini's clock must be on Mountain
+Time. It needs the watcher running (it sends the watcher a `read_open_house_report`
+command) and the `GOOGLE_OAUTH_*` values in `.env` (see `scripts/google-auth.ts`).
+
+```bash
+cp deploy/launchd/com.longitude.pre-bot.open-house.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.longitude.pre-bot.open-house.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.longitude.pre-bot.open-house.plist
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house   # run once now (optional)
+```
+
+Log: `/tmp/str-open-house.log`. Run records: `data/open-house/<YYYY-MM-DD>.json`.
+
 ## Reboot behavior (FileVault)
 
 These are **LaunchAgents** (user domain), so they start when the user session starts.

@@ -16,11 +16,15 @@
  *   --force   bypass the approved-status and new_listing-source guards (testing)
  *
  * SCOPE GUARD — only listings the MLS watcher found (listing_source =
- * "new_listing") get a task. Manually triggered PREs (mls_on_demand /
- * zillow_on_demand) are excluded by design.
+ * "new_listing") get a task, plus evaluations the open-house tracker started
+ * (listing_source "mls_on_demand", recorded in data/open-house/*.json). Other
+ * manually triggered PREs (mls_on_demand / zillow_on_demand) are excluded by
+ * design.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { isOpenHouseTrackerEval } from "./open-house-ledger.ts";
 
 import {
   createContact,
@@ -60,7 +64,8 @@ function loadEnv() {
 // Erik — task owner in HubSpot.
 const TASK_OWNER_ID = process.env.HUBSPOT_TASK_OWNER_ID || "80608210";
 
-// Only MLS-watcher listings get an agent task.
+// Only MLS-watcher listings get an agent task (plus open-house tracker evals —
+// see the scope guard above).
 const ALLOWED_LISTING_SOURCE = "new_listing";
 
 function text(value: unknown): string {
@@ -206,10 +211,10 @@ export async function createAgentTaskForListing(
   }
 
   // --- Guards (return, don't throw) --------------------------------------
-  if (listingSource !== ALLOWED_LISTING_SOURCE && !opts.force) {
+  if (listingSource !== ALLOWED_LISTING_SOURCE && !opts.force && !(await isOpenHouseTrackerEval(mlsNumber))) {
     const reason =
       `listing_source "${listingSource}" — agent tasks are only created for ` +
-      `MLS-watcher listings ("${ALLOWED_LISTING_SOURCE}").`;
+      `MLS-watcher listings ("${ALLOWED_LISTING_SOURCE}") and open-house tracker evaluations.`;
     say(`Skip: ${reason}`);
     return { ok: true, skipped: "wrong-source", reason, mlsNumber, evalId };
   }

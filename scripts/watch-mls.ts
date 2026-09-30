@@ -6,6 +6,7 @@ import { getBrowserBackend, launchConfiguredPersistentContext, listBrowserRunTar
 import { markOnDemandRequestForCommand } from "./workflows/on-demand-request-store.ts";
 import { isFlexMlsUrl, type OnDemandListingScrape } from "./workflows/on-demand-listing.ts";
 import { permalinkMatchesAddress } from "./permalink-url.ts";
+import { readOpenHouseReport, type OpenHouseEnrichment, type OpenHouseReportResult } from "./flexmls-open-house.ts";
 import { extractZillowListingFromPage, extractZpid, isZillowBlocked } from "./workflows/zillow.ts";
 
 const repoRoot = resolve(import.meta.dirname, "..");
@@ -124,7 +125,16 @@ type ScrapeMlsListingCommand = {
   createdAt: string;
 };
 
-type MlsCommand = SubmitMls2faCommand | ScrapeZillowListingCommand | ScrapeMlsListingCommand;
+type ReadOpenHouseReportCommand = {
+  id: string;
+  type: "read_open_house_report";
+  date: string;
+  enrichMls?: string[];
+  submittedBy?: string;
+  createdAt: string;
+};
+
+type MlsCommand = SubmitMls2faCommand | ScrapeZillowListingCommand | ScrapeMlsListingCommand | ReadOpenHouseReportCommand;
 
 type MlsCommandResult =
   | {
@@ -138,8 +148,16 @@ type MlsCommandResult =
     }
   | {
       commandId: string;
+      ok: true;
+      action: "read_open_house_report";
+      createdAt: string;
+      data: OpenHouseReportResult;
+      htmlPath?: string;
+    }
+  | {
+      commandId: string;
       ok: false;
-      action: "scrape_zillow_listing" | "scrape_mls_listing";
+      action: "scrape_zillow_listing" | "scrape_mls_listing" | "read_open_house_report";
       createdAt: string;
       error: string;
       htmlPath?: string;
@@ -1014,15 +1032,131 @@ async function handleScrapeZillowListingCommand(context: BrowserContext, command
   }
 }
 
+/**
+ * Open-house tracker support: send the Public Open Houses report to search
+ * results, then run the SAME row → link → nightly-rental chain the hot-sheet
+ * scan uses, limited to the MLS #s the caller couldn't answer from Supabase.
+ */
+async function enrichOpenHouseListings(page: Page, wanted: Set<string>): Promise<OpenHouseEnrichment[]> {
+  let sendFrame: Frame | null = null;
+  for (const frame of page.frames()) {
+    if (await frame.locator(':text("Send to Search Results")').first().isVisible().catch(() => false)) {
+      sendFrame = frame;
+      break;
+    }
+  }
+  if (!sendFrame) throw new Error("Send to Search Results not found on the open-house report.");
+  await sendFrame.locator(':text("Send to Search Results")').first().click();
+
+  // "Results: N" renders before all the rows do (seen live: 2 of 67 rows a
+  // second after the count appeared), so wait until the grid holds N rows of
+  // the same tr.listing markup the hot sheet uses. On timeout, carry on with
+  // whatever rendered — the caller warns about listings it didn't get.
+  let surface: FlexSurface | null = null;
+  let rowCount = 0;
+  let expected = 0;
+  const timeline: string[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    await page.waitForTimeout(1000);
+    for (const frame of page.frames()) {
+      const count = await frame.locator("tr.listing").count().catch(() => 0);
+      if (count > rowCount || (count > 0 && !surface)) {
+        surface = frame;
+        rowCount = count;
+        const text = (await frame.locator("body").innerText().catch(() => "")) || "";
+        expected = Number(text.match(/Results:\s*(\d+)/)?.[1] || 0);
+      }
+    }
+    timeline.push(`${i + 1}s:${rowCount}`);
+    if (surface && expected > 0 && rowCount >= expected) break;
+  }
+  if (!surface) throw new Error("Open-house search results grid did not load (no listing rows after 60s).");
+  if (expected > 0 && rowCount < expected) {
+    await exportNavigationHtml(page, "open-house-grid-partial").catch(() => {});
+    await logLine(`mls watcher: open-house grid incomplete rows=${rowCount}/${expected} timeline=${timeline.join(",")}`);
+  }
+
+  const extracted = await extractHotSheetListings(surface, false);
+  const subset = dedupeListingsByMls(extracted.listings.filter((row) => wanted.has(row.mlsNumber)));
+  await logLine(
+    `mls watcher: open-house grid domRows=${rowCount}/${expected || "?"} parsed=${extracted.listings.length} enriching=${subset.length}/${wanted.size}`,
+  );
+  const links = await resolveMissingListingUrls(page, subset);
+  const withUrl = links.listings.filter((row) => Boolean(row.listingUrl));
+  const eligibility = await resolveNightlyRentalAllowed(page, withUrl);
+  const byMls = new Map(eligibility.listings.map((row) => [row.mlsNumber, row]));
+  return links.listings.map((row) => {
+    const resolved = byMls.get(row.mlsNumber);
+    return {
+      mlsNumber: row.mlsNumber,
+      listingUrl: row.listingUrl || "",
+      nightlyRentalAllowed: resolved?.nightlyRentalAllowed || "",
+      strApproved: resolved?.strApproved,
+    };
+  });
+}
+
+async function handleReadOpenHouseReportCommand(page: Page, command: ReadOpenHouseReportCommand) {
+  const label = `open-house-${safeFileLabel(command.date)}`;
+  try {
+    await logLine(`mls watcher: handling open-house report command id=${command.id} date=${command.date} enrich=${command.enrichMls?.length || 0}`);
+    await loginIfNeeded(page);
+    const activePage = await warmSearchSurface(page);
+    const report = await readOpenHouseReport(activePage, command.date);
+    const htmlPaths = await exportNavigationHtml(activePage, `${label}-report`).catch(() => [] as string[]);
+
+    const wanted = new Set((command.enrichMls || []).filter((mls) => report.entries.some((entry) => entry.mlsNumber === mls)));
+    let enrichments: OpenHouseEnrichment[] = [];
+    let enrichError: string | undefined;
+    if (wanted.size > 0) {
+      try {
+        enrichments = await enrichOpenHouseListings(activePage, wanted);
+      } catch (error) {
+        enrichError = error instanceof Error ? error.message : String(error);
+        await exportNavigationHtml(activePage, `${label}-enrich-error`).catch(() => {});
+        await logLine(`mls watcher: open-house enrichment failed id=${command.id} error=${enrichError}`);
+      }
+    }
+
+    await appendCommandResult({
+      commandId: command.id,
+      ok: true,
+      action: "read_open_house_report",
+      createdAt: new Date().toISOString(),
+      data: { header: report.header, entries: report.entries, enrichments, enrichError },
+      htmlPath: htmlPaths[0],
+    });
+    await logLine(
+      `mls watcher: open-house report completed id=${command.id} entries=${report.entries.length} enriched=${enrichments.length}${enrichError ? " enrichError=yes" : ""}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const htmlPaths = await exportNavigationHtml(page, `${label}-error`).catch(() => [] as string[]);
+    await appendCommandResult({
+      commandId: command.id,
+      ok: false,
+      action: "read_open_house_report",
+      createdAt: new Date().toISOString(),
+      error: message,
+      htmlPath: htmlPaths[0],
+    });
+    await logLine(`mls watcher: open-house report command error id=${command.id} error=${message}`);
+  }
+}
+
 async function processWatcherCommands(
   mlsContext: BrowserContext,
   basePage: Page,
   zillowContext: BrowserContext,
 ) {
-  const commands = await drainCommands(["scrape_zillow_listing", "scrape_mls_listing"]);
+  const commands = await drainCommands(["scrape_zillow_listing", "scrape_mls_listing", "read_open_house_report"]);
   for (const command of commands) {
     if (command.type === "scrape_zillow_listing") {
       await handleScrapeZillowListingCommand(zillowContext, command);
+    } else if (command.type === "read_open_house_report") {
+      // Runs on the main scan page: the next scan re-navigates to the hot sheet
+      // from wherever this leaves it (scanOnce always logs in + warms first).
+      await handleReadOpenHouseReportCommand(basePage, command);
     } else if (command.type === "scrape_mls_listing") {
       if (mlsOnDemandBrowserBackend === mlsBrowserBackend) {
         await handleScrapeMlsListingCommand(mlsContext, basePage, command);
@@ -2391,8 +2525,13 @@ async function resolveMissingListingUrls(page: Page, listings: HotSheetListing[]
   return { listings: next, attempts };
 }
 
-async function extractHotSheetListings(surface: FlexSurface): Promise<ExtractedHotSheet> {
-  return await surface.evaluate(() => {
+/**
+ * `requireNewListingMarker` (default true) keeps the hot-sheet behavior of
+ * reading only rows flagged "New Listing". The open-house grid passes false —
+ * there every Active row matters, and most aren't new.
+ */
+async function extractHotSheetListings(surface: FlexSurface, requireNewListingMarker = true): Promise<ExtractedHotSheet> {
+  return await surface.evaluate((requireNewMarker) => {
     const bodyText = document.body.innerText || "";
     if (!bodyText.includes("Results:") && !bodyText.includes("Hot Sheet For") && !bodyText.includes("New Listings (")) {
       return {
@@ -2422,7 +2561,7 @@ async function extractHotSheetListings(surface: FlexSurface): Promise<ExtractedH
       const markerEl = row.querySelector('[title="New Listing"]');
       const statusText = statusCell?.textContent?.replace(/\s+/g, " ").trim() || "";
       const markerText = markerEl?.textContent?.replace(/\s+/g, " ").trim() || "";
-      if (!statusText.includes("Active") || !markerText.includes("New Listing")) continue;
+      if (!statusText.includes("Active") || (requireNewMarker && !markerText.includes("New Listing"))) continue;
       candidateRows += 1;
 
       const image = row.querySelector('img[alt="Listing Image"]') as HTMLImageElement | null;
@@ -2665,7 +2804,7 @@ async function extractHotSheetListings(surface: FlexSurface): Promise<ExtractedH
         linkSourceCounts,
       },
     };
-  });
+  }, requireNewListingMarker);
 }
 
 async function persistCandidateSkeletons(candidates: HotSheetListing[]) {

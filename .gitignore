@@ -26,3 +26,6 @@ autoresearch.jsonl
 # Local template/image scratch outputs
 templates/assets/*
 !templates/assets/background_only.png
+
+# Open-house tracker run records (runtime state)
+data/open-house/

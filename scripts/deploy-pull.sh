@@ -12,7 +12,10 @@
 #   - scripts/workflows/**, lib.ts ....... NO restart (each eval/review runs as
 #                                          a fresh `tsx` subprocess that re-reads
 #                                          the files from disk).
-#   - scripts/watch-mls.ts, browser-runtime.ts ... restart the WATCHER (long-lived).
+#   - scripts/watch-mls.ts, browser-runtime.ts, flexmls-open-house.ts ... restart
+#                                          the WATCHER (long-lived).
+#   - scripts/open-house-*.ts, google*.ts, hubspot-agent-task.ts ... NO restart
+#                                          (run per invocation by launchd / approve).
 #   - HERMES.md, scripts/hermes/** ....... restart the GATEWAY (loaded at start).
 #   - docs / tests / *.example ........... no runtime effect.
 #   - anything else that looks like runtime code (*.ts/*.sh/*.py) ... restart BOTH,
@@ -65,6 +68,8 @@ while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
     scripts/watch-mls.ts|scripts/browser-runtime.ts)      restart_watcher=1 ;;
+    scripts/flexmls-open-house.ts)                         restart_watcher=1 ;;  # imported by the watcher
+    scripts/open-house-*.ts|scripts/google.ts|scripts/google-auth.ts|scripts/hubspot-agent-task.ts) : ;;  # per-run subprocess (launchd job / approve); no restart
     HERMES.md|scripts/hermes/*)                            restart_gateway=1 ;;
     scripts/workflows/*)                                   : ;;  # fresh subprocess; no restart
     *.md|*.example|*/__tests__/*|*.test.ts|deploy/*|data/*) : ;; # no runtime effect
