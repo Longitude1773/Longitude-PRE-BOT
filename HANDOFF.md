@@ -197,6 +197,10 @@ signal. Two consequences:
 - Don't use it to judge gateway health, and don't treat its absence/presence as evidence.
 - The log is ~99.9% this one repeated traceback, which makes grep-based diagnosis slow.
   Filter it out first: `grep -vE "Session is closed|^Traceback|^  File |^    "`.
+  **Beware of `awk`-accumulating the whole file** — a 190 MB buffer will hang. Find the
+  newest launch with `grep -b "Starting gateway with" … | tail -1` and `tail -c +OFFSET`.
+  Lines written from 2026-10-12 onward are timestamped (see the stamper item below), so
+  ordering no longer has to be inferred from byte position.
 
 **Cleared by the 2026-10-12 gateway restart.** The loop lived in the old process's dead
 `aiohttp` session, so bouncing the gateway ended it: **zero** occurrences after the new
@@ -1055,9 +1059,36 @@ Everything below is done and verified:
       were fixed on 2026-10-12 (see above), so both files now point at `C0AR6BHQ9M1`.
       Residual gap: if outbound Slack itself breaks, nothing can reach you — would need
       email/push, probably not worth it yet.
-- [ ] **Timestamp the gateway log** — every 2026-09-11 diagnosis was slowed by an
-      untimestamped, warnings-only log; ordering had to be inferred from file position.
-      Highest-leverage debuggability fix.
+- [x] **Timestamp the gateway log** — **DONE 2026-10-12.** Not in the framework: the
+      formatter is hardcoded in vendored hermes as `'%(levelname)s %(name)s: %(message)s'`
+      (no `asctime`), and `logging:` in config.yaml exposes only level/size/count — patching
+      it would be machine-local and wiped by a reinstall. Instead `start-gateway.sh` pipes
+      the gateway's merged output through `scripts/hermes/log-stamp.py`, which is repo-owned
+      and also stamps output the Python formatter never sees (slack_bolt tracebacks, aiohttp
+      errors, npm/node warnings). Verified live: every post-launch line now carries
+      `2026-10-12T14:45:06-0600`.
+      - `PIPESTATUS[0]` carries the gateway's own exit code to launchd, not the stamper's;
+        there is a test for that. The pipeline is wrapped in `set +e` so the
+        "exited with status" line and the status-file dump now also run on a failing exit
+        (previously `set -e` aborted the script first and you lost both).
+      - Falls back to unpiped logging with a warning if the stamper file is missing.
+- [x] **Cap runaway log spam** — **DONE 2026-10-12**, same stamper. If one line repeats more
+      than `LOG_STAMP_MAX_REPEATS` (20) within `LOG_STAMP_WINDOW_SECONDS` (60), further
+      copies are counted and summarized rather than written. Measured: 1,000 synthetic
+      `Session is closed` lines produced **14** output lines with full accounting. The
+      721,686-line / 190 MB log would have been a few hundred lines.
+      - **This is NOT socket backoff and does not make a dead socket recover.** Real backoff
+        belongs in `slack_sdk` (third-party, inside the venv, wiped by pip) and would not
+        help anyway, since `Session is closed` means the `aiohttp` session is permanently
+        closed. The remedy remains a gateway restart.
+      - `LOG_STAMP_DISABLE=1` passes everything through, stamped but unsuppressed.
+- [ ] **Auto-recover a dead Slack socket** — the real fix for the above, still open. The
+      socket dying is unrecoverable in-process but *is* detectable (a burst of
+      `Session is closed`, now conveniently collapsed into one `[log-stamp] suppressed N`
+      line with a timestamp). Having the gateway exit non-zero on that condition would let
+      launchd's `KeepAlive` self-heal it, which is what a human kickstart does by hand
+      today. Detection could also live in `pipeline-alert.ts`, which already runs every
+      15 min.
 - [ ] **Fix the V2-over-V3 approve resolution bug** — see the 2026-09-11 section. Live
       mis-filed rows on MLS 12603066 are still uncorrected (proposed fix specced there,
       not applied). Will recur on any multi-version eval.

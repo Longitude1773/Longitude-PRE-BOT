@@ -168,8 +168,34 @@ if [[ -n "${RUNTIME_CONFIG_FILE:-}" ]]; then
 fi
 echo "Starting gateway with: $PYTHON_BIN -u -m gateway.run"
 
-"$PYTHON_BIN" -u -m gateway.run
-STATUS=$?
+# Pipe the gateway's merged output through log-stamp.py, which adds an ISO
+# timestamp to every line and caps runaway repeats.
+#
+# Why here and not in the framework: the gateway's log formatter is hardcoded
+# in vendored hermes as '%(levelname)s %(name)s: %(message)s' (no asctime), and
+# `logging:` in config.yaml only exposes level/size/count. Patching it would be
+# machine-local and wiped by a reinstall. Stamping in this pipe also covers
+# output the Python formatter never sees — slack_bolt tracebacks, aiohttp
+# errors, npm/node warnings.
+#
+# The repeat cap is damage control, NOT socket backoff: a dead Slack socket
+# ("Session is closed") wrote 721,686 identical tracebacks on 2026-08-10 —
+# 190 MB, 99.4% of the file. Real backoff belongs in slack_sdk (third-party,
+# wiped by pip) and would not help anyway, since that state never recovers.
+# The remedy for a dead socket is still a gateway restart.
+STAMPER="$PROJECT_DIR/scripts/hermes/log-stamp.py"
+set +e
+if [[ -f "$STAMPER" ]]; then
+  # PIPESTATUS[0] so the gateway's own exit code reaches launchd, not the
+  # stamper's. `set +e` so the status lines below run on failure too.
+  "$PYTHON_BIN" -u -m gateway.run 2>&1 | "$PYTHON_BIN" -u "$STAMPER"
+  STATUS=${PIPESTATUS[0]}
+else
+  echo "WARNING: $STAMPER missing — logging unstamped and unthrottled"
+  "$PYTHON_BIN" -u -m gateway.run
+  STATUS=$?
+fi
+set -e
 
 echo "gateway.run exited with status $STATUS"
 if [[ -f "$STATUS_FILE" ]]; then
