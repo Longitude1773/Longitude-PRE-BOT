@@ -15,6 +15,7 @@ data/migrations/
 data/images/
 data/pdfs/
 data/inbox/
+data/exports/
 .env
 .hermes.env
 .hermes-runtime/
