@@ -8,11 +8,12 @@ long-lived services, kept running and `KeepAlive`-restarted on crash:
 - `com.longitude.pre-bot.watcher.plist` — runs `scripts/hermes/start-mls-watch.sh`
   (the persistent MLS watcher).
 
-Two more are **scheduled one-shots** — they run and exit, so a `-` in the PID column of
+Three more are **scheduled one-shots** — they run and exit, so a `-` in the PID column of
 `launchctl list` is healthy, not a crash (sections below):
 
 - `com.longitude.pre-bot.open-house.plist` — weekly open-house tracker (Tue/Wed).
 - `com.longitude.pre-bot.mention-alert.plist` — gateway liveness alert (every 5 min).
+- `com.longitude.pre-bot.pipeline-alert.plist` — pipeline stall alert (every 15 min).
 
 These replace running `npm run str:start` by hand. **Do not run `str:start` while the
 agents are loaded** — it would spawn a duplicate gateway (double-responds in Slack) and
@@ -109,6 +110,53 @@ echo '{"updatedAt":"1970-01-01T00:00:00.000Z","alertedMentions":[],"alertedError
   > data/inbox/app-mention-alert-state.json
 npm run mention-alert
 ```
+
+## Pipeline stall alert (`com.longitude.pre-bot.pipeline-alert.plist`)
+
+A scheduled job, not a service: runs `scripts/pipeline-alert.ts` every **15 minutes** and
+exits. The companion to the liveness alert above — that one watches the *conversation*, so
+it is blind to a watcher that has quietly stopped producing (nobody mentions the bot, so
+nothing looks wrong). This watches *outcomes*.
+
+It reads `data/inbox/mls-watch-state.json`, which the watcher rewrites every cycle, and
+alerts on: a stopped heartbeat, listings failing to post, a persistently empty hot sheet,
+a persistent logged-out state, a `not-ok` queue run, an active 2FA gate, or the state file
+being missing entirely. It runs as its own process on purpose — the watcher is the thing
+that can stall, and code inside it cannot report its own silence.
+
+Needs only `SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID`; see `.env.example` for the optional
+`PIPELINE_ALERT_*` overrides. It also reads the watcher's own
+`FLEXMLS_WATCH_INTERVAL_SECONDS` / `FLEXMLS_SCAN_WINDOW_*` / `FLEXMLS_SCAN_ENABLED` so its
+idea of "late" matches the watcher's schedule.
+
+```bash
+cp deploy/launchd/com.longitude.pre-bot.pipeline-alert.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.longitude.pre-bot.pipeline-alert.plist
+
+# Seed FIRST so the first scheduled run can't alert on a standing condition.
+npx tsx scripts/pipeline-alert.ts --seed
+
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.longitude.pre-bot.pipeline-alert.plist
+launchctl enable    gui/$(id -u)/com.longitude.pre-bot.pipeline-alert
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.pipeline-alert   # run once now (optional)
+```
+
+Check by hand without posting: `npm run pipeline-alert -- --dry-run`.
+Log: `/tmp/str-pipeline-alert.log`. State: `data/inbox/pipeline-alert-state.json` (sample
+history + per-signal cooldown stamps). Logic + tests: `scripts/pipeline-alert-lib{,.test}.ts`.
+
+**Testing against a fixture** — do not hand-edit the live watcher state, which the watcher
+rewrites every cycle and which `create-zillow-eval.ts` reads to decide whether the watcher
+is up. Use the override flags, and keep `--dry-run` on:
+
+```bash
+npx tsx scripts/pipeline-alert.ts --dry-run --cooldown 0 \
+  --state-file tmp/fixture.json --alert-state-file tmp/alert.json
+```
+
+Unlike the mention alert, findings here **re-alert on a cooldown** (default 6h) rather than
+once: the 2026-08-10 stall lasted four days, and a single message that scrolls away is how
+it stayed unnoticed.
 
 ## Reboot behavior (FileVault)
 

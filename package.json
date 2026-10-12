@@ -27,6 +27,7 @@
     "autoresearch:refresh-benchmark": "node --import tsx scripts/autoresearch/build-underwrite-benchmark.ts",
     "autoresearch:refresh-review-reward": "node --import tsx scripts/autoresearch/build-review-reward-benchmark.ts",
     "mention-alert": "tsx scripts/app-mention-alert.ts",
+    "pipeline-alert": "tsx scripts/pipeline-alert.ts",
     "watch:mls": "bash scripts/hermes/start-mls-watch.sh",
     "browser:smoke": "tsx scripts/browser-smoke.ts",
     "str:start": "bash scripts/hermes/start-str-stack.sh",

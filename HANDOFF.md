@@ -309,6 +309,57 @@ Smaller notes:
 - Idempotency protects manual edits: `planSheetMerge` only touches cells that are blank,
   hold a known placeholder, or still hold exactly what the bot last wrote. Safe to re-run.
 
+### Pipeline stall alert — BUILT this session
+
+`scripts/pipeline-alert.ts` + `pipeline-alert-lib.ts` (+ 27 tests), every 15 min under
+`com.longitude.pre-bot.pipeline-alert`. Architecture in `ANCHOR.md` → "Scheduled job: the
+pipeline stall alert". Installed, seeded, and verified running clean under launchd.
+
+**One design departure from this file's original sketch.** The note below proposed putting
+this inside `processReviewQueue()` ("the watcher already parses `actionCounts`, so this is a
+few lines there"). It is a separate process instead, because **the watcher is the thing that
+can stall** — code inside it cannot report its own silence, and a dead watcher is precisely
+the 2026-08-10 case. The cost is re-reading `mls-watch-state.json` instead of having the
+values in hand; the benefit is that a hung or dead watcher still gets caught.
+
+**The trap that would have made this alert worse than useless.** The obvious signal is
+`lastQueueRun.failed`, which the HANDOFF note pointed at. That field is
+`survivors.length` — items written back to the queue — which is normal holds **plus** real
+failures. Today it reads `62` with all 62 being healthy `hold_missing_str_approval` items
+waiting on STR data, and those legitimately sit in the queue indefinitely. Alerting on it
+would have fired every 15 minutes forever and been muted within a day.
+
+The fix is `deriveFailures()`, taking the larger of two independent derivations:
+- explicit failure action names (`failed`, `skipped_listing_write_failed`), and
+- `survivors − holds` — which *is* the failure count, since an item is only re-queued
+  because it is held or because it failed. This survives a failure action being renamed.
+
+Verified against the real state file: 62 survivors, 62 holds, **0 failures** → healthy.
+
+**Checks and the incident each comes from:**
+
+| Check | Targets |
+|---|---|
+| `queue-failures` | 2026-08-10 — ready listings failing their write and re-queueing |
+| `hot-sheet-empty` | 2026-09-10 — `loggedIn=true` while parked on the SSO login page |
+| `heartbeat-stale` | a watcher that stopped cycling at all |
+| `logged-out`, `two-factor-active` | credential / 2FA gates blocking the scrape |
+| `queue-run-error`, `watch-state-missing` | processor returned not-ok; state file gone |
+
+**Things to preserve if you touch it:**
+- **Staleness is window-aware** — measured from `max(state.updatedAt, today's 07:00 MT)`.
+  Without that, every morning at 07:05 looks like a 12-hour stall. There is a test for it.
+- **Persistence checks need ≥3 consecutive samples**, so one odd reading cannot alert. The
+  alert keeps its own sample ring (24h) in `data/inbox/pipeline-alert-state.json`.
+- **Findings re-alert on a 6h cooldown**, not once — a four-day stall must keep nagging.
+  This differs deliberately from the liveness alert's alert-once behavior.
+- **Test with `--state-file` / `--alert-state-file`**, never by editing the live watcher
+  state: the watcher rewrites it every cycle and `create-zillow-eval.ts` reads it to decide
+  whether the watcher is up.
+- **Keep `--dry-run` on while testing.** I dropped it once during this session and posted a
+  real alert about 15 fictional failures into `#str-evaluations`; it was deleted via
+  `chat.delete`, but the near-miss is the reason the fixture flags exist.
+
 ### Docs were stale going in (the thing that cost the most time)
 
 `054919a` (2026-09-30) — the open-house tracker, plus edits to `watch-mls.ts`,
@@ -986,23 +1037,18 @@ Everything below is done and verified:
 ## Outstanding / optional (none block operation)
 
 - [x] **Commit `scripts/hermes/start-gateway.sh`** — DONE in `3653e5d` (venv-PATH fix).
-- [~] **Alert on a stalled pipeline** — the 2026-08-10 outage ran 4 days unnoticed because
-      nothing checks outcomes. The **gateway half is DONE** (2026-10-12, see "Gateway
-      liveness alert" above); the **pipeline half is still open**:
-      - *pipeline (OPEN):* any `action: "failed"` in the queue-processor result, or a ready
-        (`strApproved`) queue item older than ~2h. The watcher already parses
-        `actionCounts` in `processReviewQueue()`, so this is a few lines there. Dedup via
-        the same pattern as `data/inbox/mls-approval-alert-state.json`. Still worth doing —
-        the liveness alert watches the *conversation*, so a watcher that posts nothing at
-        all is invisible to it. Note there is live evidence this matters: the 2026-10-12
-        queue run reported `processed: 79, failed: 62` (all `hold_missing_str_approval`),
-        and nothing anywhere surfaced that.
-      - *gateway (DONE):* implemented as `scripts/app-mention-alert.ts` — unanswered
-        mentions plus provider-error replies, every 5 min via launchd. The two abandoned
-        log-based ideas, kept as a warning: a climbing `Socket Mode unhealthy` count was
-        superseded (and the 09-11 note claiming `Session is closed` "does not exist in this
-        build" was simply wrong — see the correction above), and `gateway_state.json`
-        freshness is useless because it only writes on state changes.
+- [x] **Alert on a stalled pipeline** — **DONE 2026-10-12, both halves.** The 2026-08-10
+      outage ran 4 days unnoticed because nothing checked outcomes; now two jobs do.
+      - *gateway:* `scripts/app-mention-alert.ts` — unanswered mentions plus provider-error
+        replies, every 5 min. See "Gateway liveness alert" above.
+      - *pipeline:* `scripts/pipeline-alert.ts` — every 15 min. See "Pipeline stall alert"
+        below.
+      - Two abandoned log-based ideas, kept as a warning: a climbing `Socket Mode unhealthy`
+        count was superseded (and the 09-11 note claiming `Session is closed` "does not
+        exist in this build" was simply wrong — see the correction above), and
+        `gateway_state.json` freshness is useless because it only writes on state changes.
+        `mls-watch-state.json`, by contrast, *is* a real per-cycle heartbeat and is what the
+        pipeline alert reads.
 
       Alerts go out via `scripts/slack.ts` (Web API), which kept working through every
       failure. It reads `.env`; `.hermes.env`'s channel IDs were placeholders until they

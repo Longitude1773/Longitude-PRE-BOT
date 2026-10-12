@@ -12,7 +12,7 @@ to Slack for human approval, applies threaded feedback, and generates a final PR
 once approved. It is a real revenue tool, not a demo — treat its outputs and Slack
 posts as production.
 
-## Runtime topology (two long-lived pieces + two scheduled jobs)
+## Runtime topology (two long-lived pieces + three scheduled jobs)
 
 1. **Hermes gateway** — the [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
    framework installed at `~/.hermes/hermes-agent`. It connects to Slack via **Socket
@@ -35,15 +35,18 @@ launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.gateway    # restart g
 launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.watcher    # restart watcher
 launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house    # run the weekly tracker now (no -k: it is not long-lived)
 launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.mention-alert  # run the liveness check now
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.pipeline-alert # run the pipeline check now
 ```
 
-Two more agents are loaded, both *scheduled one-shots* rather than services — they run and
+Three more agents are loaded, all *scheduled one-shots* rather than services — they run and
 exit, so a `-` in the PID column is healthy, not a crash:
 
 - `com.longitude.pre-bot.open-house` — Tue 15:00 / Wed 08:00. See "Scheduled job: the
   weekly open-house tracker" below.
 - `com.longitude.pre-bot.mention-alert` — every 5 min. See "Scheduled job: the gateway
   liveness alert" below.
+- `com.longitude.pre-bot.pipeline-alert` — every 15 min. See "Scheduled job: the pipeline
+  stall alert" below.
 
 The `npm run` scripts remain the right entry point on a **dev machine** with no launchd
 agents loaded. Logs (both cases): `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
@@ -171,6 +174,55 @@ no unanswered mentions to test against, so both failure paths are covered synthe
 Check by hand without posting: `npm run mention-alert -- --dry-run`.
 Log: `/tmp/str-mention-alert.log`.
 
+## Scheduled job: the pipeline stall alert
+
+`scripts/pipeline-alert.ts`, every 15 minutes
+(`deploy/launchd/com.longitude.pre-bot.pipeline-alert.plist`). Added 2026-10-12, the
+companion to the liveness alert above.
+
+**Why a second alert.** The liveness alert watches the *conversation*, so it is structurally
+blind to a watcher that has quietly stopped producing: nobody mentions the bot, so nothing
+looks wrong. The 2026-08-10 stall ran **four days** exactly that way. This one watches
+outcomes.
+
+**The two stalls it targets, and the tell for each:**
+
+| Incident | What happened | The tell |
+|---|---|---|
+| 2026-08-10 | A Supabase row cap made every ready listing fail its write and re-queue; nothing posted for 4 days. Heartbeat fine, `loggedIn` true. | `action: "failed"` repeating |
+| 2026-09-10 | `looksLoggedIn` reported a live session while parked on the SSO login page. | `hotSheet=0 parsed=0/0` |
+
+Both were invisible to liveness — `launchctl list` showed healthy PIDs throughout. **So
+every check reads an outcome, never a liveness flag.** Checks: stopped heartbeat, listings
+failing to post, persistently empty hot sheet, persistent logged-out, `not-ok` queue run,
+active 2FA gate, and the state file missing entirely.
+
+**Design points that matter if you change it:**
+- **`lastQueueRun.failed` is a trap — do not alert on it.** It is `survivors.length`, i.e.
+  items written back to the queue, which is normal holds **plus** real failures. On
+  2026-10-12 it read `62` while all 62 were healthy `hold_missing_str_approval` items. Use
+  `deriveFailures()`, which takes the larger of the explicit failure actions and
+  `survivors − holds` (that difference *is* the failure count, since an item is only
+  re-queued because it is held or because it failed).
+- **Reads `data/inbox/mls-watch-state.json`, which is a genuine heartbeat** — the watcher
+  rewrites it every cycle, unlike `gateway_state.json`, which only writes on state changes
+  and is therefore useless for freshness.
+- **Staleness is window-aware.** The watcher sleeps outside 07:00–19:00 MT, so staleness is
+  measured from `max(state.updatedAt, today's window start)`. Without that, every morning
+  at 07:05 would look like a 12-hour stall.
+- **Separate process, on purpose.** The watcher is the thing that can stall; code inside it
+  cannot report its own silence. (HANDOFF's original sketch put this inside
+  `processReviewQueue()` — that would catch failing listings but never a dead watcher.)
+- **Findings re-alert on a cooldown** (default 6h) rather than once, because a four-day
+  stall needs to keep nagging. Contrast the liveness alert, which alerts once per finding.
+
+Decision logic is in `scripts/pipeline-alert-lib.ts` with 27 tests in
+`pipeline-alert-lib.test.ts` (wired into `autoresearch.checks.sh`), including both historical
+signatures and the holds-are-not-failures false positive. Check by hand without posting:
+`npm run pipeline-alert -- --dry-run`. Test against a fixture with
+`--state-file` / `--alert-state-file` rather than editing the live watcher state.
+Log: `/tmp/str-pipeline-alert.log`.
+
 ## Scheduled job: the weekly open-house tracker
 
 Added `054919a` (2026-09-30). A **third** launchd job alongside the gateway and watcher,
@@ -266,8 +318,8 @@ PID column is normal — it only lives for the duration of a run).
 Runs on a dedicated **Mac mini** (`~/projects/Longitude-PRE-BOT`, user
 `erikmikkelsen`), supervised by three **launchd** user agents (plists in
 `deploy/launchd/`): `com.longitude.pre-bot.gateway` and `…watcher` (both long-lived, with
-`KeepAlive` crash-restart), plus two scheduled one-shots with no `KeepAlive`:
-`…open-house` and `…mention-alert`. The Mini's clock must be **America/Denver** — the
+`KeepAlive` crash-restart), plus three scheduled one-shots with no `KeepAlive`:
+`…open-house`, `…mention-alert`, and `…pipeline-alert`. The Mini's clock must be **America/Denver** — the
 open-house schedule is wall-clock. The gateway needs its venv on PATH so its bundled Python (3.11 with
 `dotenv`/`firecrawl`/`slack_bolt`) is used — `scripts/hermes/start-gateway.sh` handles
 this.

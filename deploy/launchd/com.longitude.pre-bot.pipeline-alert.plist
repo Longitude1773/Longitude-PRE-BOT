@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.longitude.pre-bot.pipeline-alert</string>
+
+  <!-- Pipeline stall alert. One run every 15 minutes, then exit (no KeepAlive).
+       Reads data/inbox/mls-watch-state.json (which the watcher rewrites every
+       cycle) and alerts on OUTCOMES: a stopped heartbeat, listings failing to
+       post, a persistently empty hot sheet, logged-out, or a 2FA gate.
+
+       Runs as its own process on purpose — the watcher is the thing that can
+       stall, so code inside it cannot report its own silence.
+
+       Self-deduplicating via data/inbox/pipeline-alert-state.json, with a
+       re-alert cooldown (default 6h) so a persisting fault keeps nagging
+       without spamming. The first run seeds and alerts on nothing. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/npx</string>
+    <string>tsx</string>
+    <string>scripts/pipeline-alert.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/erikmikkelsen/projects/Longitude-PRE-BOT</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/erikmikkelsen</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Every 15 min: half the watcher's 30 min cycle, so a missed cycle is seen
+       promptly while persistence checks still accumulate distinct samples.
+       A run missed while asleep fires on wake. -->
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/str-pipeline-alert.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/str-pipeline-alert.log</string>
+</dict>
+</plist>
