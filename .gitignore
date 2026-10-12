@@ -18,6 +18,11 @@ data/inbox/
 data/exports/
 .env
 .hermes.env
+# Timestamped credential backups (e.g. .env.bak.20261012) — these hold real
+# secrets. The bare `.env` rule above does not match them. `.env.example` is
+# intentionally tracked and unaffected.
+.env.bak*
+.hermes.env.bak*
 .hermes-runtime/
 *.log
 results.tsv

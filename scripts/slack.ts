@@ -21,6 +21,8 @@ const FORM_METHODS = new Set([
   "conversations.history",
   "reactions.get",
   "files.getUploadURLExternal",
+  "auth.test",
+  "chat.getPermalink",
 ]);
 
 function summarizeSlackContext(body: Record<string, unknown>) {
@@ -30,7 +32,12 @@ function summarizeSlackContext(body: Record<string, unknown>) {
   return context.length > 0 ? ` (${context.join(", ")})` : "";
 }
 
-async function slackApi(method: string, body: Record<string, unknown>) {
+/**
+ * Raw Slack Web API call. Exported so monitoring scripts (e.g.
+ * `app-mention-alert.ts`) can reach methods this module has no wrapper for
+ * without duplicating the auth/encoding/error handling.
+ */
+export async function slackApi(method: string, body: Record<string, unknown>) {
   const useForm = FORM_METHODS.has(method);
   const formBody = new URLSearchParams(
     Object.entries(body).map(([key, value]) => [key, String(value)] as [string, string]),

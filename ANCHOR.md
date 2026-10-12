@@ -12,7 +12,7 @@ to Slack for human approval, applies threaded feedback, and generates a final PR
 once approved. It is a real revenue tool, not a demo — treat its outputs and Slack
 posts as production.
 
-## Runtime topology (two long-lived pieces + one scheduled job)
+## Runtime topology (two long-lived pieces + two scheduled jobs)
 
 1. **Hermes gateway** — the [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
    framework installed at `~/.hermes/hermes-agent`. It connects to Slack via **Socket
@@ -34,11 +34,16 @@ launchctl list | grep longitude.pre-bot                              # status (P
 launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.gateway    # restart gateway
 launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.watcher    # restart watcher
 launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house    # run the weekly tracker now (no -k: it is not long-lived)
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.mention-alert  # run the liveness check now
 ```
 
-A **third** agent, `com.longitude.pre-bot.open-house`, is also loaded. It is a *scheduled
-one-shot*, not a service — it runs Tue 15:00 / Wed 08:00 and exits, so a `-` in the PID
-column is healthy, not a crash. See "Third scheduled job" below.
+Two more agents are loaded, both *scheduled one-shots* rather than services — they run and
+exit, so a `-` in the PID column is healthy, not a crash:
+
+- `com.longitude.pre-bot.open-house` — Tue 15:00 / Wed 08:00. See "Scheduled job: the
+  weekly open-house tracker" below.
+- `com.longitude.pre-bot.mention-alert` — every 5 min. See "Scheduled job: the gateway
+  liveness alert" below.
 
 The `npm run` scripts remain the right entry point on a **dev machine** with no launchd
 agents loaded. Logs (both cases): `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
@@ -122,7 +127,51 @@ See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surfac
   `data/market-knowledge.md` (ADR ranges, seasonality, feature bumps) is the fallback
   basis for projections.
 
-## Third scheduled job — the weekly open-house tracker
+## Scheduled job: the gateway liveness alert
+
+`scripts/app-mention-alert.ts`, every 5 minutes
+(`deploy/launchd/com.longitude.pre-bot.mention-alert.plist`). Added 2026-10-12, after a
+fourth outage that nothing detected.
+
+**Why it exists.** Every outage so far (2026-08-10, 09-10, 09-11, 10-12) looked identical
+from Slack and was invisible everywhere else: `launchctl list` showed a healthy PID through
+all four, `preflight` returned `ok: true`, and on 09-11 two separate faults left **no log
+line at all**. The one signal present in every case is the conversation itself.
+
+**Two independent checks, because the outages come in two shapes:**
+
+1. **Silent** — a human mentions the bot and no reply ever arrives (the 09-11 shape:
+   dropped Slack events, silently black-holed model).
+2. **Errored** — the bot replies, but with a provider error (the 10-12 shape: the quota cap
+   produced a reply 2 seconds later). Check 1 is blind to this by design: it got an answer.
+   An alert from this check repeats the "check the Codex quota before re-authenticating"
+   rule, since the wording lies.
+
+**Design points that matter if you change it:**
+- **It must not depend on the gateway.** It is a short-lived script over the Slack Web API,
+  because outbound Slack kept working through all four outages while the gateway did not.
+  Residual gap: if outbound Slack breaks, nothing here can reach you.
+- **Thread discovery reaches back 14 days, but mentions are judged over 3 hours.**
+  `conversations.history` returns only top-level messages, and the common case is an
+  adjustment inside an eval thread whose parent is days old — a window sized to the mention
+  age would never surface that thread. Threads are only *read* when `latest_reply` falls
+  inside the mention window, so the wide discovery costs almost nothing (observed: 99
+  top-level messages, 1 thread actually fetched).
+- **Answered includes a `⏳ Working…` line and an empty-text file-only reply.** Both mean
+  the bot is alive, which is the question being asked.
+- Alerts post **top-level, never into the affected thread** — a reply from the bot's own
+  token would make the next run read the mention as answered. Quoted text has the bot
+  mention defused to `@bot` for the same reason (and so alerts don't ping the bot).
+- **First run seeds and alerts on nothing**, so installing it cannot alert-storm on standing
+  history. Dedup state: `data/inbox/app-mention-alert-state.json` (delete to re-seed).
+
+Decision logic is in `scripts/app-mention-alert-lib.ts` with 25 tests in
+`app-mention-alert-lib.test.ts` (wired into `autoresearch.checks.sh`) — the live channel had
+no unanswered mentions to test against, so both failure paths are covered synthetically.
+Check by hand without posting: `npm run mention-alert -- --dry-run`.
+Log: `/tmp/str-mention-alert.log`.
+
+## Scheduled job: the weekly open-house tracker
 
 Added `054919a` (2026-09-30). A **third** launchd job alongside the gateway and watcher,
 but unlike those two it is **not** long-lived: it runs once and exits (no `KeepAlive`).
@@ -217,8 +266,9 @@ PID column is normal — it only lives for the duration of a run).
 Runs on a dedicated **Mac mini** (`~/projects/Longitude-PRE-BOT`, user
 `erikmikkelsen`), supervised by three **launchd** user agents (plists in
 `deploy/launchd/`): `com.longitude.pre-bot.gateway` and `…watcher` (both long-lived, with
-`KeepAlive` crash-restart), plus `…open-house` (a scheduled one-shot, no `KeepAlive`).
-The Mini's clock must be **America/Denver** — the open-house schedule is wall-clock. The gateway needs its venv on PATH so its bundled Python (3.11 with
+`KeepAlive` crash-restart), plus two scheduled one-shots with no `KeepAlive`:
+`…open-house` and `…mention-alert`. The Mini's clock must be **America/Denver** — the
+open-house schedule is wall-clock. The gateway needs its venv on PATH so its bundled Python (3.11 with
 `dotenv`/`firecrawl`/`slack_bolt`) is used — `scripts/hermes/start-gateway.sh` handles
 this.
 

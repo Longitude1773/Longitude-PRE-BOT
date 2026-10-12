@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.longitude.pre-bot.mention-alert</string>
+
+  <!-- Gateway liveness alert. One run every 5 minutes, then exit (no KeepAlive).
+       Watches Slack for (1) mentions the bot never answered and (2) bot replies
+       that are provider errors. Deliberately a separate process from the
+       gateway, so it still reports when the gateway is dead.
+
+       Idempotent and self-deduplicating via
+       data/inbox/app-mention-alert-state.json — each finding alerts once. The
+       first run seeds that file and alerts on nothing. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/npx</string>
+    <string>tsx</string>
+    <string>scripts/app-mention-alert.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/erikmikkelsen/projects/Longitude-PRE-BOT</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/erikmikkelsen</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Every 5 minutes. A mention is only judged once it is past the grace
+       period (default 10 min), so a silent gateway surfaces within ~15 min.
+       A run missed while asleep fires on wake. -->
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/str-mention-alert.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/str-mention-alert.log</string>
+</dict>
+</plist>

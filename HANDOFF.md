@@ -167,8 +167,43 @@ nothing adds backoff to the reconnect. Still open: rotate/truncate the 198 MB
 `/tmp/str-bot-gateway.log` (it is append-mode, so the old bulk is still there), and add
 backoff so a future occurrence can't run away.
 
-This strengthens the still-open "unanswered `app_mention`" alert idea below — it is the only
-proposed signal that would have survived all of 08-10, 09-11, and today.
+This is what motivated building the "unanswered `app_mention`" alert this session — it was
+the only proposed signal that would have survived all of 08-10, 09-11, and today. Built; see
+"Gateway liveness alert" below.
+
+### Gateway liveness alert — BUILT this session
+
+`scripts/app-mention-alert.ts` + `app-mention-alert-lib.ts` (+ 25 tests), running every 5
+minutes under `com.longitude.pre-bot.mention-alert`. Architecture and the design
+constraints are in `ANCHOR.md` → "Scheduled job: the gateway liveness alert". Operational
+notes:
+
+- **Installed and verified** under launchd on the Mini (clean exit 0, correct output with
+  the plist's minimal PATH/HOME). State seeded, so it will not alert about today's
+  already-known incident. Alerts @mention `U05BJ31F72Q` (added as
+  `APP_MENTION_ALERT_USER_ID` in `.env`, the same recipient `.hermes.env` uses for FlexMLS
+  2FA alerts) and post to `SLACK_CHANNEL_ID`.
+- **Two checks, because today proved one is not enough.** An unanswered-mention check alone
+  would **not** have caught 2026-10-12: the bot replied to the 12:47 mention 2 seconds
+  later with the provider error. Hence the second check on provider-error reply text, which
+  also re-states the "check quota before re-authenticating" rule in the alert itself.
+- **A bug worth remembering, found by testing against live data.** The first version sized
+  thread discovery to the mention window, and found nothing — because
+  `conversations.history` returns only top-level messages, and the real error sat in a
+  thread whose parent was outside the window. Adjustments and approvals almost always land
+  in threads parented days earlier, so that version would have been blind to the normal
+  case. Fixed by decoupling discovery (14 days) from judging (3 hours), gated on
+  `latest_reply` so cost stays flat. **If you touch the windows, keep that split.**
+- Tests cover both failure paths synthetically because the live channel had **zero**
+  unanswered mentions across 10 days — the happy path gave nothing to verify against.
+- `scripts/slack.ts` gained an exported `slackApi` (and `auth.test` / `chat.getPermalink`
+  in `FORM_METHODS`) so this script reaches methods with no wrapper without duplicating the
+  transport.
+- Not yet proven end to end: an actual alert **post**. Rendering, detection, dedup,
+  seeding, and the launchd run are all verified; the post itself uses the same
+  `post()` every other script uses. Force one with
+  `rm data/inbox/app-mention-alert-state.json && npm run mention-alert` — on a day with a
+  provider error in the window, that posts a real alert.
 
 ### Open-house tracker — first write-up (shipped 2026-09-30, never documented)
 
@@ -892,26 +927,28 @@ Everything below is done and verified:
 ## Outstanding / optional (none block operation)
 
 - [x] **Commit `scripts/hermes/start-gateway.sh`** — DONE in `3653e5d` (venv-PATH fix).
-- [ ] **Alert on a stalled pipeline** — the 2026-08-10 outage ran 4 days unnoticed because
-      nothing checks outcomes. Highest-value item on this list. Two signals, both of which
-      were already sitting in files/logs the whole time:
-      - *pipeline:* any `action: "failed"` in the queue-processor result, or a ready
+- [~] **Alert on a stalled pipeline** — the 2026-08-10 outage ran 4 days unnoticed because
+      nothing checks outcomes. The **gateway half is DONE** (2026-10-12, see "Gateway
+      liveness alert" above); the **pipeline half is still open**:
+      - *pipeline (OPEN):* any `action: "failed"` in the queue-processor result, or a ready
         (`strApproved`) queue item older than ~2h. The watcher already parses
         `actionCounts` in `processReviewQueue()`, so this is a few lines there. Dedup via
-        the same pattern as `data/inbox/mls-approval-alert-state.json`.
-      - *gateway:* a climbing `Socket Mode unhealthy` count in `/tmp/str-bot-gateway.log`
-        (**updated 2026-09-11** — `Session is closed` does not exist in this build and
-        returns 0 while the socket is cycling). **Do not** use `gateway_state.json`
-        freshness — it only writes on state changes, so a healthy long-lived connection
-        looks identical to a dead one.
-      - *gateway, stronger signal:* an unanswered `app_mention`. On 09-11 two separate
-        faults both presented as mentions that got no reply and left **no log line at all**.
-        A check that compares recent mentions against recent bot replies in the same thread
-        would have caught both within a minute; nothing else did.
+        the same pattern as `data/inbox/mls-approval-alert-state.json`. Still worth doing —
+        the liveness alert watches the *conversation*, so a watcher that posts nothing at
+        all is invisible to it. Note there is live evidence this matters: the 2026-10-12
+        queue run reported `processed: 79, failed: 62` (all `hold_missing_str_approval`),
+        and nothing anywhere surfaced that.
+      - *gateway (DONE):* implemented as `scripts/app-mention-alert.ts` — unanswered
+        mentions plus provider-error replies, every 5 min via launchd. The two abandoned
+        log-based ideas, kept as a warning: a climbing `Socket Mode unhealthy` count was
+        superseded (and the 09-11 note claiming `Session is closed` "does not exist in this
+        build" was simply wrong — see the correction above), and `gateway_state.json`
+        freshness is useless because it only writes on state changes.
 
-      Both alert via outbound Slack (`scripts/slack.ts`, Web API), which kept working
-      through both failures. Residual gap: if outbound Slack itself breaks, nothing can
-      reach you — would need email/push, probably not worth it yet.
+      Alerts go out via `scripts/slack.ts` (Web API), which kept working through every
+      failure — and which reads `.env`, not the placeholder channel in `.hermes.env` (see
+      above). Residual gap: if outbound Slack itself breaks, nothing can reach you — would
+      need email/push, probably not worth it yet.
 - [ ] **Timestamp the gateway log** — every 2026-09-11 diagnosis was slowed by an
       untimestamped, warnings-only log; ordering had to be inferred from file position.
       Highest-leverage debuggability fix.

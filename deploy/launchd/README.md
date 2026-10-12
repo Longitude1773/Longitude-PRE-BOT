@@ -1,12 +1,18 @@
 # launchd service (macOS reboot persistence)
 
-Reference copies of the two user **LaunchAgents** that supervise the bot on the
-production Mac mini. They keep the stack running and `KeepAlive`-restart it on crash:
+Reference copies of the user **LaunchAgents** on the production Mac mini. Two are
+long-lived services, kept running and `KeepAlive`-restarted on crash:
 
 - `com.longitude.pre-bot.gateway.plist` — runs `scripts/hermes/start-gateway.sh`
   (the Hermes gateway; foreground, so launchd supervises the real process).
 - `com.longitude.pre-bot.watcher.plist` — runs `scripts/hermes/start-mls-watch.sh`
   (the persistent MLS watcher).
+
+Two more are **scheduled one-shots** — they run and exit, so a `-` in the PID column of
+`launchctl list` is healthy, not a crash (sections below):
+
+- `com.longitude.pre-bot.open-house.plist` — weekly open-house tracker (Tue/Wed).
+- `com.longitude.pre-bot.mention-alert.plist` — gateway liveness alert (every 5 min).
 
 These replace running `npm run str:start` by hand. **Do not run `str:start` while the
 agents are loaded** — it would spawn a duplicate gateway (double-responds in Slack) and
@@ -67,6 +73,33 @@ launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house   # run once n
 ```
 
 Log: `/tmp/str-open-house.log`. Run records: `data/open-house/<YYYY-MM-DD>.json`.
+
+## Gateway liveness alert (`com.longitude.pre-bot.mention-alert.plist`)
+
+A scheduled job, not a service: runs `scripts/app-mention-alert.ts` every **5 minutes**
+and exits. It watches Slack for the two shapes every past outage took — a mention the bot
+never answered, and a bot reply that is a provider error — and DMs/posts an alert. It runs
+as its own process on purpose, so it still reports when the gateway it watches is dead.
+
+Needs only `SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID` from `.env`; see `.env.example` for the
+optional `APP_MENTION_*` overrides (watch channels, alert destination, who to @mention,
+grace/lookback windows).
+
+```bash
+cp deploy/launchd/com.longitude.pre-bot.mention-alert.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.longitude.pre-bot.mention-alert.plist
+
+# Seed state FIRST so the first scheduled run can't alert on standing history.
+npx tsx scripts/app-mention-alert.ts --seed
+
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.longitude.pre-bot.mention-alert.plist
+launchctl enable    gui/$(id -u)/com.longitude.pre-bot.mention-alert
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.mention-alert   # run once now (optional)
+```
+
+Check it by hand without posting anything: `npm run mention-alert -- --dry-run`.
+Log: `/tmp/str-mention-alert.log`. Dedup state: `data/inbox/app-mention-alert-state.json`
+(delete it to re-seed). Logic + tests: `scripts/app-mention-alert-lib{,.test}.ts`.
 
 ## Reboot behavior (FileVault)
 
