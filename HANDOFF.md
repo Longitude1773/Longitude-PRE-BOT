@@ -152,13 +152,31 @@ inside the traceback).
 re-clone or a second machine. `MIGRATION.md`'s path-fixup list should gain "replace the
 placeholder channel IDs" alongside the `/Users/...` rewrites.
 
-**Behavior change to expect: the gateway now posts a shutdown/restart notice into
-`#str-evaluations` on every restart.** It always tried to; the post just failed silently
-against the bogus channel. Nothing is posted on *startup* (verified: zero new messages
-after this restart), so the only new noise is one message per gateway bounce — which is
-arguably useful signal, in the channel where you would notice it. To suppress, set
-`slack.gateway_restart_notification: false` in `~/.hermes/config.yaml` (currently unset, so
-the framework default of ON applies; see `gateway/run.py:5702`) and restart.
+**Side effect of the fix, now also handled.** Correcting the channel un-silenced a post the
+gateway had always *attempted* and never landed: on every restart it sends
+`⚠️ Gateway shutting down — Your current task will be interrupted.` to the home channel.
+Nothing is posted on startup (verified: zero new messages), so the cost was one message per
+bounce. **Suppressed 2026-10-12** via `gateway_restart_notification: false` under the
+`slack:` block in `~/.hermes/config.yaml`.
+
+Getting that flag right has two traps:
+
+- **It goes directly under `slack:`, not under a `platforms:` block.** `PlatformConfig.from_dict`
+  (`gateway/config.py:460`) checks the platform's own top-level key and its `extra`, and the
+  code comment says as much. Default is `True` (`gateway/config.py:414`). Verify placement
+  without guessing by running the framework's own loader:
+  ```
+  python -c "import sys;sys.path.insert(0,'.');from gateway.config import load_gateway_config,Platform; \
+  print(load_gateway_config().platforms[Platform.SLACK].gateway_restart_notification)"
+  ```
+  from `~/.hermes/hermes-agent` — it printed `False` for slack and `True` for discord as a
+  control.
+- **The flag is read by the process doing the shutting down,** so the first restart after
+  setting it *still posts* (that process started without it). It takes two restarts to
+  confirm; verified here — restart 1 posted the notice, restart 2 posted nothing.
+
+Like `.hermes.env`, `~/.hermes/config.yaml` lives outside the repo, so this is machine-local
+too. Backup: `~/.hermes/config.yaml.bak.20261012-restart-notice`.
 
 Incidental discovery: **`C0AR6BHQ9M1` is a private channel.** `conversations.info` on it
 returns `missing_scope` while `conversations.history` works — because history needs

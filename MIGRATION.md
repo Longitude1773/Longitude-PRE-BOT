@@ -144,9 +144,14 @@ rsync -av ~/projects/Longitude-PRE-BOT/data/images \
 > channel). Fixed 2026-10-12 — see `HANDOFF.md`.
 >
 > This needs a **gateway restart**, not just a file edit: `start-gateway.sh` rebuilds
-> `.hermes-runtime/.env` from `.hermes.env` at launch. Note it also means the gateway starts
-> posting a restart notice to that channel; suppress with
-> `slack.gateway_restart_notification: false` in `~/.hermes/config.yaml` if unwanted.
+> `.hermes-runtime/.env` from `.hermes.env` at launch.
+>
+> Fixing the channel also un-silences the gateway's shutdown notice
+> (`⚠️ Gateway shutting down…`) into that channel on every restart — it had always been
+> attempted and always failed. On this deployment that is suppressed with
+> `gateway_restart_notification: false` placed **directly under the `slack:` block** of
+> `~/.hermes/config.yaml` (not under `platforms:`). That file is outside the repo, so carry
+> it with the rest of `~/.hermes/`.
 
 ## Step 4 — Clear stale runtime locks (on the NEW machine)
 
