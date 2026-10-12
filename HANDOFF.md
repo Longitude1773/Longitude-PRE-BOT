@@ -179,10 +179,15 @@ constraints are in `ANCHOR.md` → "Scheduled job: the gateway liveness alert". 
 notes:
 
 - **Installed and verified** under launchd on the Mini (clean exit 0, correct output with
-  the plist's minimal PATH/HOME). State seeded, so it will not alert about today's
-  already-known incident. Alerts @mention `U05BJ31F72Q` (added as
-  `APP_MENTION_ALERT_USER_ID` in `.env`, the same recipient `.hermes.env` uses for FlexMLS
-  2FA alerts) and post to `SLACK_CHANNEL_ID`.
+  the plist's minimal PATH/HOME), and a real alert was posted and confirmed end to end.
+- **Alert recipient is `U053T09V88P` (Erik)**, set as `APP_MENTION_ALERT_USER_ID` in `.env`.
+  **Do not copy `.hermes.env`'s `SLACK_ALERT_USER_ID` (`U05BJ31F72Q`) — that is Cameron, not
+  the operator.** The first version did exactly that and pinged the wrong person.
+  `SLACK_ALLOWED_USERS=U07UQ0YUTQQ` in `.hermes.env` is a third, different ID and is also
+  not the operator (and is inert anyway, since `SLACK_ALLOW_ALL_USERS=true`). None of these
+  can be resolved to names from the bot: `users.info` and `users.lookupByEmail` both return
+  `missing_scope` (no `users:read` / `users:read.email`). If you need to identify a user ID,
+  the practical route is message activity in the channel — or add the scope.
 - **Two checks, because today proved one is not enough.** An unanswered-mention check alone
   would **not** have caught 2026-10-12: the bot replied to the 12:47 mention 2 seconds
   later with the provider error. Hence the second check on provider-error reply text, which
@@ -199,11 +204,25 @@ notes:
 - `scripts/slack.ts` gained an exported `slackApi` (and `auth.test` / `chat.getPermalink`
   in `FORM_METHODS`) so this script reaches methods with no wrapper without duplicating the
   transport.
-- Not yet proven end to end: an actual alert **post**. Rendering, detection, dedup,
-  seeding, and the launchd run are all verified; the post itself uses the same
-  `post()` every other script uses. Force one with
-  `rm data/inbox/app-mention-alert-state.json && npm run mention-alert` — on a day with a
-  provider error in the window, that posts a real alert.
+- **Self-trigger loop — the bug that live posting exposed.** An alert quotes the offending
+  text verbatim and is posted by the bot's own token, so the provider-error check matched
+  the alert it had just posted, alerted about *that*, and looped — once per scheduled run,
+  forever. Caught on the second real post (`errored` climbed 1 → 2). Fixed with two layers:
+  `isOwnAlert()` recognizes the alert headers (now defined once in `alertHeader` so detector
+  and formatter cannot drift), and the runner records each alert's own ts into dedup state
+  so even a reworded header cannot restart it. Own-alerts also no longer count as
+  *answering* a mention. Pinned by 5 regression tests. **Any new check that reads bot
+  messages must exclude this monitor's own output.**
+- **To force a real alert, the state file must EXIST but be empty.** Deleting it triggers
+  the first-run seed path, which alerts on nothing:
+  ```bash
+  echo '{"updatedAt":"1970-01-01T00:00:00.000Z","alertedMentions":[],"alertedErrors":[]}' \
+    > data/inbox/app-mention-alert-state.json
+  npm run mention-alert          # posts for real if anything is in the window
+  ```
+- Verified end to end on 2026-10-12: one alert posted, correct recipient, and the two
+  following runs stayed silent. `chat.delete` works on the bot's own messages, which is how
+  the test posts were cleaned up.
 
 ### Open-house tracker — first write-up (shipped 2026-09-30, never documented)
 

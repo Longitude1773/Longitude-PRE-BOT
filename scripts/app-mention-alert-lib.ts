@@ -51,7 +51,36 @@ export const IGNORED_SUBTYPES = new Set([
   "bot_remove",
 ]);
 
+/**
+ * Alert headers. Defined here, next to the detector, because the detector has
+ * to recognize them — see `isOwnAlert`.
+ */
+export const alertHeader = {
+  silent: (n: number) => `🚨 *Bot did not answer ${n} mention(s)* — the gateway may be down`,
+  errored: (n: number) => `⚠️ *Bot replied with a provider error ${n} time(s)* — the model layer is failing`,
+};
+
+/**
+ * Matches this script's own alert messages.
+ *
+ * Load-bearing, and found the hard way: an alert quotes the offending text
+ * verbatim and is posted by the bot's own token, so the provider-error check
+ * matched the alert it had just posted, alerted about that, and looped — once
+ * per scheduled run, forever. Any bot message carrying an alert header is this
+ * monitor talking to itself and must never be a finding.
+ *
+ * Belt and braces: the runner also records each alert's own ts into dedup
+ * state, so even a reworded header cannot restart the loop.
+ */
+const OWN_ALERT_SIGNATURE = /\*Bot (did not answer \d+ mention|replied with a provider error \d+ time)/;
+
+export function isOwnAlert(text: string | undefined) {
+  return OWN_ALERT_SIGNATURE.test(text || "");
+}
+
 export function isProviderError(text: string | undefined) {
+  // An alert quoting an error is not itself an error.
+  if (isOwnAlert(text)) return false;
   return PROVIDER_ERROR_PATTERNS.some((p) => p.test(text || ""));
 }
 
@@ -85,7 +114,13 @@ export function shouldReadThread(parent: SlackMessage, mentionOldestTs: number) 
  * the bot is alive and working, which is exactly what this check is asking.
  */
 export function isAnswered(thread: SlackMessage[], mention: SlackMessage, botUserId: string) {
-  return thread.some((m) => m.user === botUserId && Number(m.ts) > Number(mention.ts));
+  return thread.some(
+    (m) =>
+      m.user === botUserId &&
+      Number(m.ts) > Number(mention.ts) &&
+      // This monitor's own alert is not the bot answering anyone.
+      !isOwnAlert(m.text),
+  );
 }
 
 /**

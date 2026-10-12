@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  alertHeader,
   describeAge,
   detect,
   isAnswered,
+  isOwnAlert,
   isProviderError,
   mentionsBot,
   neutralize,
@@ -158,6 +160,48 @@ test("detect: ignores a human quoting the error text", () => {
 test("detect: a normal bot answer is not an error", () => {
   const ok = msg({ ts: ago(30), user: BOT, text: "Balanced is $125,500 based on 8 comps." });
   assert.equal(run([ok]).errored.length, 0);
+});
+
+// --- self-trigger loop (regression, found by live testing) -----------------
+
+test("detect: does NOT alert on its own alert quoting an error (the loop bug)", () => {
+  // The live failure: an alert quotes the offending text verbatim and is posted
+  // by the bot's own token, so the provider-error check matched the alert it had
+  // just posted and alerted again — once per scheduled run, forever.
+  const ownAlert = msg({
+    ts: ago(20),
+    user: BOT,
+    text:
+      `<@U05BJ31F72Q>\n${alertHeader.errored(1)}\n` +
+      `• _56 min ago_: ":warning: Provider authentication failed. Check the configured credentials; raw provider details are in the gateway logs."`,
+  });
+  assert.equal(run([ownAlert]).errored.length, 0);
+});
+
+test("detect: does NOT alert on its own unanswered-mention alert", () => {
+  const ownAlert = msg({ ts: ago(20), user: BOT, text: alertHeader.silent(2) });
+  assert.equal(run([ownAlert]).errored.length, 0);
+});
+
+test("isOwnAlert: matches both headers, not ordinary bot text", () => {
+  assert.equal(isOwnAlert(alertHeader.errored(1)), true);
+  assert.equal(isOwnAlert(alertHeader.silent(3)), true);
+  assert.equal(isOwnAlert(":warning: Provider authentication failed."), false);
+  assert.equal(isOwnAlert("Balanced is $125,500."), false);
+});
+
+test("isAnswered: this monitor's own alert does not count as answering", () => {
+  const mention = msg({ ts: ago(30), text: `<@${BOT}> hi` });
+  const thread = [mention, msg({ ts: ago(20), user: BOT, text: alertHeader.silent(1) })];
+  assert.equal(isAnswered(thread, mention, BOT), false);
+});
+
+test("detect: a real error still alerts even when an old alert sits nearby", () => {
+  const ownAlert = msg({ ts: ago(40), user: BOT, text: alertHeader.errored(1) });
+  const realError = msg({ ts: ago(20), user: BOT, text: "⏱️ The model provider is rate-limiting requests." });
+  const { errored } = run([ownAlert, realError]);
+  assert.equal(errored.length, 1);
+  assert.equal(errored[0].message.ts, realError.ts);
 });
 
 test("isProviderError: covers each gateway provider-error string", () => {

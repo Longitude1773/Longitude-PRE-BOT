@@ -47,6 +47,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  alertHeader,
   describeAge,
   detect,
   neutralize,
@@ -233,7 +234,7 @@ async function main() {
   const lines: string[] = [];
 
   if (newUnanswered.length > 0) {
-    lines.push(`🚨 *Bot did not answer ${newUnanswered.length} mention(s)* — the gateway may be down`);
+    lines.push(alertHeader.silent(newUnanswered.length));
     for (const u of newUnanswered.slice(0, 5)) {
       let link = "";
       try {
@@ -249,7 +250,7 @@ async function main() {
   }
 
   if (newErrored.length > 0) {
-    lines.push(`⚠️ *Bot replied with a provider error ${newErrored.length} time(s)* — the model layer is failing`);
+    lines.push(alertHeader.errored(newErrored.length));
     for (const e of newErrored.slice(0, 3)) {
       lines.push(`• _${describeAge(e.message.ts, nowSeconds)}_: "${neutralize(e.message.text, botUserId).slice(0, 160)}"`);
     }
@@ -280,7 +281,12 @@ async function main() {
     if (!alertChannel) throw new Error("No alert destination — set APP_MENTION_ALERT_CHANNEL_ID or SLACK_CHANNEL_ID.");
     // Posted top-level, never into the affected thread: a reply from the bot's
     // own token would make the next run read the mention as answered.
-    await post(alertChannel, alertText);
+    const posted = await post(alertChannel, alertText);
+    // Second line of defense against the self-trigger loop that live testing
+    // exposed: remember the alert's own ts, so even if `isOwnAlert` stops
+    // matching (e.g. someone rewords a header) this message can never be
+    // re-detected as a provider error and alerted about.
+    if (posted?.ts) nextState.alertedErrors = pruneState([...nextState.alertedErrors, posted.ts], nowSeconds, args.lookbackMinutes);
     await writeState(nextState);
     log(`alerted to ${alertChannel}`);
   }

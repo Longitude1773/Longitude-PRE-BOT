@@ -98,8 +98,17 @@ launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.mention-alert   # run onc
 ```
 
 Check it by hand without posting anything: `npm run mention-alert -- --dry-run`.
-Log: `/tmp/str-mention-alert.log`. Dedup state: `data/inbox/app-mention-alert-state.json`
-(delete it to re-seed). Logic + tests: `scripts/app-mention-alert-lib{,.test}.ts`.
+Log: `/tmp/str-mention-alert.log`. Logic + tests: `scripts/app-mention-alert-lib{,.test}.ts`.
+
+Dedup state: `data/inbox/app-mention-alert-state.json`. Note the two modes — **deleting**
+the file makes the next run a *first run*, which re-seeds and alerts on nothing (that is the
+safe install path). To force a real alert instead, leave the file in place but empty it:
+
+```bash
+echo '{"updatedAt":"1970-01-01T00:00:00.000Z","alertedMentions":[],"alertedErrors":[]}' \
+  > data/inbox/app-mention-alert-state.json
+npm run mention-alert
+```
 
 ## Reboot behavior (FileVault)
 
