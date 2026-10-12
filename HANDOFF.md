@@ -119,7 +119,7 @@ without adding a new key. Until one exists, a quota cap is a hard outage with no
 degradation — options are wait for the window, raise the plan tier, or add a second
 provider credential.
 
-### Found during the restart: `.hermes.env` Slack channel IDs are still placeholders
+### `.hermes.env` Slack channel IDs were placeholders (found, then fixed)
 
 The gateway restart surfaced `chat.postMessage → channel_not_found`, and the cause is a
 literal unreplaced placeholder:
@@ -137,12 +137,34 @@ originated alerts) read `.hermes.env`, hit the placeholder, and fail silently. T
 `channel_not_found` watch item from the migration notes — now explained rather than just
 observed.
 
-**Not fixed here, deliberately.** Correcting it makes the gateway start posting into the
-live `#str-evaluation…` channel (startup/shutdown notices at minimum), which is a visible
-change to a production channel — the owner should decide that, and may prefer a separate
-low-noise channel for gateway chatter. Relevant to the "Alert on a stalled pipeline" item
-below: alerts routed through `scripts/slack.ts` are fine as written, but anything the
-*gateway* posts will silently vanish until these two values are corrected.
+**FIXED 2026-10-12.** Both values in `.hermes.env` now read `C0AR6BHQ9M1`, matching the
+`SLACK_HOME_CHANNEL_NAME=str-evaluations` that was already there and the channel the bot
+has always posted evals to. Backup at `.hermes.env.bak.20261012` (gitignored). The gateway
+was restarted to pick it up — `start-gateway.sh` rebuilds `.hermes-runtime/.env` from
+`.hermes.env` at launch, so **a restart is required; editing the file alone does nothing.**
+
+Verified: `channel_not_found` occurrences after the new process started = **0** (the two in
+the log around the restart are the *old* process failing its shutdown notice, both before
+the startup banner — a single failed post, logged twice, once as the ERROR line and once
+inside the traceback).
+
+**`.hermes.env` is gitignored, so this fix is machine-local** and will not travel to a
+re-clone or a second machine. `MIGRATION.md`'s path-fixup list should gain "replace the
+placeholder channel IDs" alongside the `/Users/...` rewrites.
+
+**Behavior change to expect: the gateway now posts a shutdown/restart notice into
+`#str-evaluations` on every restart.** It always tried to; the post just failed silently
+against the bogus channel. Nothing is posted on *startup* (verified: zero new messages
+after this restart), so the only new noise is one message per gateway bounce — which is
+arguably useful signal, in the channel where you would notice it. To suppress, set
+`slack.gateway_restart_notification: false` in `~/.hermes/config.yaml` (currently unset, so
+the framework default of ON applies; see `gateway/run.py:5702`) and restart.
+
+Incidental discovery: **`C0AR6BHQ9M1` is a private channel.** `conversations.info` on it
+returns `missing_scope` while `conversations.history` works — because history needs
+`groups:history` (granted) and info needs `groups:read` (not granted). That is the same
+missing scope behind the `users.conversations` channel-directory warning that loops in the
+log, and it is on the pending-scopes list above.
 
 ### Correction to the 2026-09-11 entry — `Session is closed` is NOT a health signal
 
@@ -965,9 +987,10 @@ Everything below is done and verified:
         freshness is useless because it only writes on state changes.
 
       Alerts go out via `scripts/slack.ts` (Web API), which kept working through every
-      failure — and which reads `.env`, not the placeholder channel in `.hermes.env` (see
-      above). Residual gap: if outbound Slack itself breaks, nothing can reach you — would
-      need email/push, probably not worth it yet.
+      failure. It reads `.env`; `.hermes.env`'s channel IDs were placeholders until they
+      were fixed on 2026-10-12 (see above), so both files now point at `C0AR6BHQ9M1`.
+      Residual gap: if outbound Slack itself breaks, nothing can reach you — would need
+      email/push, probably not worth it yet.
 - [ ] **Timestamp the gateway log** — every 2026-09-11 diagnosis was slowed by an
       untimestamped, warnings-only log; ordering had to be inferred from file position.
       Highest-leverage debuggability fix.

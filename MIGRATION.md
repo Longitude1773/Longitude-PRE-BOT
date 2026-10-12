@@ -135,6 +135,19 @@ rsync -av ~/projects/Longitude-PRE-BOT/data/images \
 > folder too; the point is to bring whichever of the two actually exists on the
 > source machine, not to assume the default path.
 
+> **Replace the placeholder Slack channel IDs in `.hermes.env`.**
+> It shipped with `SLACK_HOME_CHANNEL=C1234567890` and `SLACK_CHANNEL_ID=C1234567890` —
+> literal placeholders, not real channels. The symptom is deceptive: eval posting keeps
+> working (that path reads **`.env`**, which has the real ID), so the bot looks healthy
+> while every *gateway-originated* post dies silently with `channel_not_found`. On this
+> deployment the correct value for both is **`C0AR6BHQ9M1`** (`#str-evaluations`, a private
+> channel). Fixed 2026-10-12 — see `HANDOFF.md`.
+>
+> This needs a **gateway restart**, not just a file edit: `start-gateway.sh` rebuilds
+> `.hermes-runtime/.env` from `.hermes.env` at launch. Note it also means the gateway starts
+> posting a restart notice to that channel; suppress with
+> `slack.gateway_restart_notification: false` in `~/.hermes/config.yaml` if unwanted.
+
 ## Step 4 — Clear stale runtime locks (on the NEW machine)
 
 The copied `.hermes-runtime/` still references the old machine's process. Remove
