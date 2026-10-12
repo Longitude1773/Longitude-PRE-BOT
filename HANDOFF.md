@@ -4,7 +4,229 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-09-11 — gateway outage: silent model rejection + dropped Slack events
+## Current status — 2026-10-12 — Slack "Provider authentication failed" = Codex quota, NOT auth
+
+**Symptom:** every bot request in Slack returns
+`⚠️ Provider authentication failed. Check the configured credentials; raw provider details
+are in the gateway logs.` Bot had worked normally all morning.
+
+**Actual cause: the ChatGPT Codex 5-hour usage cap was exhausted.** Nothing was wrong with
+any credential. `~/.hermes/auth.json` → `credential_pool["openai-codex"][0]` said so:
+
+```
+last_status          = exhausted
+last_error_code      = 429
+last_error_reason    = usage_limit_reached
+last_error_reset_at  = 2026-10-12 15:38:38 local
+last_refresh         = 2026-10-12 10:38:33 local   <- OAuth refreshed fine, 1h before the cap
+```
+
+And the gateway log, explicitly: `Codex provider quota exhausted (429); retry after 14023s.`
+**`Credentials are still valid.`** Plan `plus`, `limit_window_minutes: 300`.
+
+### Do NOT re-authenticate on this symptom
+
+`hermes auth` / re-login cannot help a quota cap, and Codex *login* endpoints 429 on their
+own (`hermes_cli/auth.py:7090`) — so re-auth attempts can manufacture a second, real
+failure on top of the first. **Check `auth.json`'s `last_status` / `last_error_reset_at`
+before touching credentials.** A red herring to expect: `auth.json`'s mtime updates at the
+moment of the 429 (the framework stamps the `exhausted` marker), so the credential file
+looks freshly modified exactly when you suspect it.
+
+### Why the message says "authentication" — a framework mislabel, 4 links
+
+1. The framework models quota exhaustion as an `AuthError` subtype (hence
+   `is_rate_limited_auth_error()` existing to disambiguate it).
+2. `fallback_providers: []` in **both** `~/.hermes/config.yaml` and
+   `.hermes-runtime/config.yaml`, and `credential_pool.copilot` is empty →
+   `_try_resolve_fallback_provider()` returns `None`, so `gateway/run.py:1834` raises
+   `RuntimeError`.
+3. That lands in a blanket `except Exception` at **`gateway/run.py:17525`** which
+   hard-codes `f"⚠️ Provider authentication failed: {exc}"` regardless of cause.
+4. That literal string then re-enters `_gateway_provider_error_reply()`
+   (`gateway/run.py:356`), where `_GATEWAY_AUTH_ERROR_RE` is tested **before**
+   `_GATEWAY_RATE_LIMIT_RE` — and matches the text step 3 just injected.
+
+Both regexes would have classified the raw error correctly as rate-limiting. Step 3 poisons
+the text before the correct classifier ever runs. So **the Slack wording is not evidence
+about which failure occurred** — always read the log/`auth.json`, not the chat message.
+
+### Nothing was lost — verify before re-running anything
+
+All five on-demand evals requested that morning completed and posted. Confirmed in
+Supabase + `data/`:
+
+| MLS | Address | Balanced | State |
+|---|---|---|---|
+| 12505264 | 401 Silver King Dr 73 | $78,500 | v2 **approved**, PDF in R2 |
+| 12604423 | 2100 Deer Valley Dr 501 | $125,500 | v2 **approved**, PDF in R2 |
+| 12600389 | 2650 Deer Valley Dr 202 | $88,700 | v1 posted, awaiting review |
+| 12604389 | 1499 Park Avenue 1 | $70,200 | v1 posted, awaiting review |
+| 12600530 | 1164 Cabin Way 9 | $36,100 | v1 posted, awaiting review |
+
+All 5 watcher scrapes returned `ok: True` (`data/inbox/mls-command-results.jsonl`). The
+`workflow:create-on-demand-eval` errors in the log that *look* like failures took
+**0.86–1.14s** — far too fast to have reached the ~34s scrape. They are retries hitting the
+duplicate-request guard **after** the eval had already succeeded. Don't re-run an eval on
+the strength of those log lines; check `Evaluations` first.
+
+### What actually burned the cap
+
+**Not the underwriting — the Slack conversation around it.** Verified by grepping the whole
+tree: *nothing* under `scripts/` makes an LLM call (no provider SDK, no model host URL, no
+model slug). The underwrite chain is deterministic TypeScript, and
+`UNDERWRITE_WEB_RESEARCH_ENABLED` scrapes Brave Search HTML rather than calling a model. So
+generating all 5 evals cost **zero** tokens.
+
+What cost tokens was the **gateway**: the agent fielding 5 eval requests in chat, then
+running 2 full adjustment→approval cycles through Slack threads, each carrying a large
+context (one failing call alone: `msgs=54 tokens=~53,718`). That is what a `plus` plan's
+5-hour window does not cover. Practical read: **the bot's analytical work is free; its
+conversational work is what you pay for.** Secondary waste, now fixed or worth fixing:
+
+- **PDF tooling thrash (fixed).** Every PDF verification cycled `pdftotext` → `uv` →
+  `python3 -c "from pypdf import ..."` → `pymupdf`, all absent, tripping
+  `same_tool_failure_warning; count=3` before reaching the documented temp-venv fallback.
+  **Fixed 2026-10-12:** `pypdf` 6.20.1 installed into `~/.hermes/hermes-agent/venv`, and
+  both `SKILL.md` and `references/pdf-artifact-verification.md` rewritten to give the
+  direct one-liner first and to name the three extractors that do *not* exist here.
+  Verified against `data/pdfs/2100-Deer-Valley-Drive-501.pdf`.
+  - Why the venv is the right place: `start-gateway.sh` prepends
+    `~/.hermes/hermes-agent/venv/bin` to `PATH`, confirmed on the live process
+    (`ps eww <pid>`), so the agent's terminal `python3` **is** the 3.11 venv. Note your own
+    interactive shell's `python3` is system 3.9.6 — testing there gives a false negative.
+- **Background self-improvement reviews.** 2 passes today, 3 wasted `skill_manage`
+  "Refusing background curator patch" round-trips. Each runs a full extra model pass on the
+  **main** model — `auxiliary.background_review` is unset, so there is no cheaper routing
+  (and no second credential to route to). Triggers:
+  `skills.creation_nudge_interval: 15` tool-iterations and `memory.nudge_interval: 10`
+  turns. Raise both to cut this; minor contributor, not the main cause.
+- **`tool_loop_guardrails.hard_stop_enabled` (changed to `true` 2026-10-12).** It was
+  `false`, so guardrails only *warned*: the `hard_stop_after` thresholds
+  (`exact_failure: 5`, `same_tool_failure: 8`) were defined but could never fire, letting a
+  thrashing loop run unbounded. Now enabled in `~/.hermes/config.yaml` (backup:
+  `config.yaml.bak.20261012-preoutage`). **Takes effect on the next gateway start**, since
+  the start script regenerates the runtime copy. This is the single best guard against a
+  runaway loop eating a quota window.
+- One `search_files` for `scripts/mls-command-bridge.ts`, which **exists nowhere** in the
+  repo — it comes from the carried `state.db` memory, not any file. Cheap one-off.
+
+### There is NO fallback LLM credential on this box
+
+Checked `.env`, `.hermes.env`, `~/.hermes/.env`: the only model credential anywhere is the
+Codex OAuth in `~/.hermes/auth.json`. So `fallback_providers` **cannot** be populated
+without adding a new key. Until one exists, a quota cap is a hard outage with no graceful
+degradation — options are wait for the window, raise the plan tier, or add a second
+provider credential.
+
+### Found during the restart: `.hermes.env` Slack channel IDs are still placeholders
+
+The gateway restart surfaced `chat.postMessage → channel_not_found`, and the cause is a
+literal unreplaced placeholder:
+
+```
+.hermes.env :  SLACK_HOME_CHANNEL=C1234567890      <- placeholder, no such channel
+.hermes.env :  SLACK_CHANNEL_ID=C1234567890        <- placeholder
+.env        :  SLACK_CHANNEL_ID=C0AR6BHQ9M1        <- the real channel
+```
+
+This has been latent for months and is easy to miss because **the visible path works**:
+eval posting goes through `scripts/slack.ts`, which reads `.env` and gets the correct
+`C0AR6BHQ9M1`. Only the gateway's *own* direct posts (startup/shutdown notices, gateway-
+originated alerts) read `.hermes.env`, hit the placeholder, and fail silently. This is the
+`channel_not_found` watch item from the migration notes — now explained rather than just
+observed.
+
+**Not fixed here, deliberately.** Correcting it makes the gateway start posting into the
+live `#str-evaluation…` channel (startup/shutdown notices at minimum), which is a visible
+change to a production channel — the owner should decide that, and may prefer a separate
+low-noise channel for gateway chatter. Relevant to the "Alert on a stalled pipeline" item
+below: alerts routed through `scripts/slack.ts` are fine as written, but anything the
+*gateway* posts will silently vanish until these two values are corrected.
+
+### Correction to the 2026-09-11 entry — `Session is closed` is NOT a health signal
+
+The 09-11 section below says `Session is closed` "does not exist in this build and returns
+0" and recommends a climbing `Socket Mode unhealthy` count as the gateway health signal.
+**That is now wrong.** As of this session `/tmp/str-bot-gateway.log` contains **721,686**
+occurrences of `Session is closed` — it *is* the log, ~198 MB of it — from a dead secondary
+aiohttp session retrying with **no backoff** since roughly the Sep 30 restart. Slack events
+flow fine throughout (all 5 evals posted), so it is pure noise and useless as a health
+signal. Two consequences:
+
+- Don't use it to judge gateway health, and don't treat its absence/presence as evidence.
+- The log is ~99.9% this one repeated traceback, which makes grep-based diagnosis slow.
+  Filter it out first: `grep -vE "Session is closed|^Traceback|^  File |^    "`.
+
+**Cleared by the 2026-10-12 gateway restart.** The loop lived in the old process's dead
+`aiohttp` session, so bouncing the gateway ended it: **zero** occurrences after the new
+process came up (the last 6 belong to the old one shutting down), and log growth dropped
+from roughly 16 MB/day of pure spam to ~8 KB/min of ordinary output. So the fix for this is
+simply *restart the gateway* — but it will recur whenever that session dies again, since
+nothing adds backoff to the reconnect. Still open: rotate/truncate the 198 MB
+`/tmp/str-bot-gateway.log` (it is append-mode, so the old bulk is still there), and add
+backoff so a future occurrence can't run away.
+
+This strengthens the still-open "unanswered `app_mention`" alert idea below — it is the only
+proposed signal that would have survived all of 08-10, 09-11, and today.
+
+### Open-house tracker — first write-up (shipped 2026-09-30, never documented)
+
+`054919a` shipped the weekly open-house tracker with no doc entry, so this is the first
+record of it. Architecture now lives in `ANCHOR.md` → "Third scheduled job". Intent, in the
+owner's words: *find the properties with open houses next Wednesday, drop them into a Google
+sheet, then run another check the night before.* What's built matches that, with the second
+pass split as Tue 15:00 (build) + Wed 08:00 (catch late entries + overnight PRE links).
+
+**Verified run history** (from the `data/open-house/<date>.json` ledgers — the authoritative
+record, and the first place to look when a cycle looks wrong):
+
+| Cycle | Run | Mode | Entries | Rows added | Evals started | Failed | Duration |
+|---|---|---|---|---|---|---|---|
+| 2026-09-30 | Wed 11:16 (manual, launch day) | create | 67 | 67 | 9 | 0 | 9m00s |
+| 2026-10-07 | Tue 10-06 15:00 (scheduled) | create | 33 | 33 | 3 | 0 | 5m09s |
+| 2026-10-07 | Wed 10-07 08:00 (scheduled) | update | 39 | 6 | 1 | 0 | 1m54s |
+
+The 2026-10-07 cycle is the **first fully scheduled one and it worked end to end** — both
+launchd triggers fired on time, and the Wednesday run justified its own existence by picking
+up 6 tours entered after Tuesday afternoon. Zero eval failures across all three runs.
+Sheets: `2026.09.30 - Open House Tracker`, `2026.10.07 - Open House Tracker`.
+
+**It costs no model quota.** Each STR-eligible listing without an eval triggers a full
+`create-on-demand-eval-manual.ts` underwrite, run sequentially, default cap **20 per run**
+(the 2026-09-30 run did 9 back-to-back in 9 minutes). Those underwrites are deterministic
+TypeScript — zero tokens — so even a heavy Tuesday cannot exhaust the Codex window on its
+own. Its real costs are watcher browser time, the FlexMLS report reads, and
+AirDNA/PriceLabs/Brave fetches. `--max-evals <n>` / `--no-evals` are throttles for *those*,
+not for quota.
+
+The indirect link worth knowing: every eval it starts posts a 📅 review thread, and working
+those threads (adjustments, approvals) **is** gateway conversation and does spend quota. So
+a 9-eval Tuesday doesn't cost tokens to produce, but it queues up a lot of reviewing that
+will. Budget the review session, not the tracker run.
+
+Smaller notes:
+- The `open-house-tracker.ts` docstring refers to plists plural
+  (`com.longitude.pre-bot.open-house-*.plist`); there is actually **one** plist with two
+  `StartCalendarInterval` entries.
+- `/tmp/str-open-house.log` did not exist as of this session even though runs have happened
+  — launchd only creates it on a run it owns, so don't read its absence as "never ran". The
+  ledgers in `data/open-house/` are the reliable history.
+- Idempotency protects manual edits: `planSheetMerge` only touches cells that are blank,
+  hold a known placeholder, or still hold exactly what the bot last wrote. Safe to re-run.
+
+### Docs were stale going in (the thing that cost the most time)
+
+`054919a` (2026-09-30) — the open-house tracker, plus edits to `watch-mls.ts`,
+`create-on-demand-eval-manual.ts`, and `mls-control.ts` — updated **no** docs at all, so
+HANDOFF/ANCHOR stopped at 2026-09-14 while the running system was 2.5 weeks ahead. Also
+noted: `scripts/workflows/create-on-demand-eval-manual.ts` is referenced by `SKILL.md`
+(lines 136, 236, 554) but is wired into **no** `package.json` script — it is invoked only as
+a bare `npx tsx` path. Worth a `workflow:` alias so it is discoverable like the others.
+
+---
+
+## 2026-09-11 — gateway outage: silent model rejection + dropped Slack events
 
 > Written 2026-09-14 from the 09-11 session. Two *independent* faults hit the gateway on
 > the same day, and they look identical from Slack (the bot goes quiet). Both are fixed;
@@ -702,6 +924,14 @@ Everything below is done and verified:
 - [ ] **Consider `streaming.enabled: true`** — with streaming off, a silent backend costs
       the full ~17 min timeout before anything is logged; streaming surfaces the same
       failure via the `no SSE events` check in ~60s.
+      **Blocker found 2026-10-12: editing `config.yaml` is not enough.**
+      `scripts/hermes/start-gateway.sh` regenerates `.hermes-runtime/config.yaml` from
+      `~/.hermes/config.yaml` on every start and *hard-codes* `streaming["enabled"] = False`
+      and `streaming["transport"] = "off"` (around line 152). The start script must be
+      changed too, or the override removed. Same regeneration explains why a stale value in
+      `.hermes-runtime/config.yaml` is harmless — only `display.*` and `streaming.*` are
+      overridden; every other key, including `tool_loop_guardrails`, passes through from
+      `~/.hermes/config.yaml`, which is therefore the one file to edit.
 - [ ] **Teach `deploy-pull.sh` about the data layer** — it infers restarts from
       `watch-mls.ts` / `browser-runtime.ts` only, but the watcher also imports
       `scripts/sheets.ts` → `scripts/supabase.ts` in its long-lived process. A change to

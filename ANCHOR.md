@@ -12,7 +12,7 @@ to Slack for human approval, applies threaded feedback, and generates a final PR
 once approved. It is a real revenue tool, not a demo — treat its outputs and Slack
 posts as production.
 
-## Runtime topology (two independent pieces)
+## Runtime topology (two long-lived pieces + one scheduled job)
 
 1. **Hermes gateway** — the [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
    framework installed at `~/.hermes/hermes-agent`. It connects to Slack via **Socket
@@ -33,7 +33,12 @@ Socket Mode events. Use `launchctl` instead:
 launchctl list | grep longitude.pre-bot                              # status (PID + last exit)
 launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.gateway    # restart gateway
 launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.watcher    # restart watcher
+launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house    # run the weekly tracker now (no -k: it is not long-lived)
 ```
+
+A **third** agent, `com.longitude.pre-bot.open-house`, is also loaded. It is a *scheduled
+one-shot*, not a service — it runs Tue 15:00 / Wed 08:00 and exits, so a `-` in the PID
+column is healthy, not a crash. See "Third scheduled job" below.
 
 The `npm run` scripts remain the right entry point on a **dev machine** with no launchd
 agents loaded. Logs (both cases): `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
@@ -65,6 +70,41 @@ See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surfac
     (`stale for NNNs` / `no SSE events`, no HTTP status). Discovery catches only the first.
     Do not trust the silent one's own suggested workaround either — it recommends `gpt-5.4`,
     which is the slug that 400s on this account. See `HANDOFF.md` (2026-09-11).
+  - **A third failure mode: the quota cap, which lies about being an auth error.** The
+    account is ChatGPT **`plus`**, whose Codex cap is a rolling **5-hour** window
+    (`limit_window_minutes: 300`). When it is exhausted, Slack shows
+    `⚠️ Provider authentication failed. Check the configured credentials` — which is a
+    framework mislabel, not an auth problem. **Never re-authenticate on that message**
+    (re-login cannot lift a cap, and the Codex login endpoint 429s on its own, creating a
+    second real fault). The authority is `~/.hermes/auth.json` →
+    `credential_pool["openai-codex"][0]`: read `last_status`, `last_error_reason`, and
+    `last_error_reset_at`. Expect a red herring — that file's mtime updates at the moment
+    of the 429, because the framework stamps the `exhausted` marker into it. Full chain and
+    line numbers: `HANDOFF.md` (2026-10-12).
+  - **There is no fallback LLM credential, by design-so-far.** `fallback_providers: []` in
+    both config files and the only model credential on the box is the Codex OAuth in
+    `~/.hermes/auth.json` (`.env` / `.hermes.env` / `~/.hermes/.env` hold none). So a quota
+    cap or a dead slug is a **hard outage with no graceful degradation** — the gateway
+    raises instead of degrading. Populating `fallback_providers` requires adding a new
+    credential first.
+  - **The eval pipeline is model-free — only the gateway spends quota.** Verified
+    2026-10-12: *nothing* under `scripts/` makes an LLM call — no provider SDK, no model
+    host URL, no model slug anywhere in the tree. The whole underwrite chain
+    (`underwrite.ts`, `underwrite-research.ts`, `underwrite-decision.ts`,
+    `process-mls-review-queue.ts`, `handle-new-eval.ts`, `lib.ts`) is deterministic
+    TypeScript over `data/market-knowledge.md`, AirDNA/PriceLabs comps, and the locked
+    scenario spread. `UNDERWRITE_WEB_RESEARCH_ENABLED` does **not** mean an LLM either — it
+    scrapes Brave Search HTML directly (`underwrite-research.ts`, 3.5s timeout, 3 results).
+    - **Consequence, and the single most useful triage fact in this repo:** new listings
+      keep getting underwritten and posted to Slack during a total model outage, because
+      that path never touches the model. Quota and model faults only ever break the
+      *conversational* half — replies, adjustments, approvals, anything the agent does on
+      your behalf. **Watcher posting fine + bot not answering = gateway/model fault**, every
+      time (2026-08-10, 2026-09-10, 2026-09-11, 2026-10-12 all presented this way).
+    - So capacity is measured in *Slack conversation*, not evals. The 2026-10-12 window was
+      exhausted by ~7 eval requests' worth of agent conversation plus 2 full
+      adjustment/approval cycles (one failing call alone carried `msgs=54`,
+      `tokens=~53,718`), not by the underwriting math, which was free.
   - The model name is also mirrored into `<repo>/.hermes-runtime/config.yaml` (the
     "Runtime config file" in the gateway's startup banner). They agreed on 2026-09-11, but
     check both if a model change ever appears not to take.
@@ -81,6 +121,73 @@ See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surfac
 - **Comp/market inputs:** AirDNA + PriceLabs APIs when available; otherwise
   `data/market-knowledge.md` (ADR ranges, seasonality, feature bumps) is the fallback
   basis for projections.
+
+## Third scheduled job — the weekly open-house tracker
+
+Added `054919a` (2026-09-30). A **third** launchd job alongside the gateway and watcher,
+but unlike those two it is **not** long-lived: it runs once and exits (no `KeepAlive`).
+
+**What it produces:** a Google **Sheet** (not a Doc) per week, one row per open house on the
+upcoming Wednesday — the Park City Board of REALTORS weekly tour. Columns:
+`Address · Agent · Brokerage · Open House Time · STR Allowed · List Price · MLS Link ·
+Balanced Revenue Projection · PRE Link`. Named `YYYY.MM.DD - Open House Tracker`, created in
+the Drive folder *Longitude Master › Longitude Management › Revenue › sales › Open House
+Tracker* (`OPEN_HOUSE_TRACKER_FOLDER_ID`, default hard-coded in `open-house-tracker.ts`).
+Posts a 📅 summary to Slack (`OPEN_HOUSE_SLACK_CHANNEL_ID`, falling back to
+`SLACK_CHANNEL_ID`), and posts a ⚠️ message if the run fails.
+
+**Schedule — two runs per cycle, by design** (`deploy/launchd/com.longitude.pre-bot.open-house.plist`):
+
+| When | Mode | Purpose |
+|---|---|---|
+| **Tue 15:00** local | `create` | Build the sheet; start evals for STR-eligible listings that have none |
+| **Wed 08:00** local | `update` | Append late-entered tours; fill PRE links approved overnight |
+
+The second run exists because tours can be entered until ~4pm Tuesday — i.e. **after** the
+first run starts. Verified real: the 2026-10-07 cycle saw 33 entries Tuesday and 39 by
+Wednesday, so the update run caught 6 late additions. Note the Tuesday run at 15:00 is
+deliberately *before* the 4pm cutoff, so it never sees the final hour; the Wednesday run is
+what closes that gap.
+
+**Dependencies, each a hard failure if absent:**
+- **The MLS watcher must be running.** The tracker has *no browser of its own* — it asks the
+  watcher for a `read_open_house_report` command on the watcher's live signed-in FlexMLS
+  session (source: FlexMLS Menu → Public Open Houses, the same report the Board prints).
+  It aborts immediately if there is no watcher state file.
+- **Google OAuth**: `GOOGLE_OAUTH_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN` in `.env`
+  (`scripts/google-auth.ts`, `scripts/google.ts`).
+- **Local clock must be America/Denver** — `StartCalendarInterval` is wall-clock, not UTC.
+
+**It is idempotent, and that is load-bearing.** Re-running the same command against the same
+sheet is safe and expected. It finds an existing sheet by name in the folder before creating
+one, tracks state in `data/open-house/<date>.json` (the ledger), and `planSheetMerge` only
+writes cells that are blank, hold a known placeholder, or still hold exactly what the bot
+last wrote — **so your manual edits in the sheet survive**. Placeholders it manages:
+`Unknown – check MLS`, `Not STR-eligible`, `Evaluation in progress`,
+`Evaluation failed – see Slack`, `Needs evaluation (no MLS link found)`.
+
+**It does NOT consume model quota.** For each STR-eligible open-house listing with no
+existing evaluation it shells out to `scripts/workflows/create-on-demand-eval-manual.ts` — a
+full underwrite — **sequentially**, 15-minute timeout each, capped at `--max-evals`
+(**default 20**). Observed: 9 evals (2026-09-30, 67 entries) and 3+1 (2026-10-07 cycle).
+Those underwrites are deterministic TypeScript and cost **zero** model tokens (see "The
+eval pipeline is model-free" below), so a heavy Tuesday cannot by itself exhaust the Codex
+window. Its real costs are the watcher's browser time and the AirDNA/PriceLabs/Brave
+fetches. Use `--max-evals <n>` to throttle or `--no-evals` to build the sheet only when you
+want to limit FlexMLS load, not for quota reasons.
+
+The one indirect quota link: each eval it starts posts a 📅 review thread to Slack, and if
+you then work those threads conversationally (adjustments, approvals), *those replies* are
+gateway turns and do cost quota. A big Tuesday therefore front-loads a lot of potential
+conversational work, even though generating it was free.
+
+**Safe ways to run it by hand:**
+```bash
+npx tsx scripts/open-house-tracker.ts --dry-run    # FlexMLS + Supabase read only → CSV, writes nothing
+npx tsx scripts/open-house-tracker.ts --date 2026-10-14 --no-evals --no-slack
+```
+Logs: `/tmp/str-open-house.log`. Status: `launchctl list | grep open-house` (a `-` in the
+PID column is normal — it only lives for the duration of a run).
 
 ## Key invariants — do not violate
 
@@ -102,14 +209,16 @@ See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surfac
 - `HERMES.md` — the gateway agent's persona + runtime rules (its system prompt).
 - `CLAUDE.md` — operating instructions for the analyst agent (pipeline, helper scripts).
 - `MIGRATION.md` — moving the bot + gateway to a new machine.
+- `deploy/launchd/README.md` — the three launchd agents and how they are installed.
 - `HANDOFF.md` — latest session status (read alongside this file).
 
 ## Deployment (current)
 
 Runs on a dedicated **Mac mini** (`~/projects/Longitude-PRE-BOT`, user
-`erikmikkelsen`), supervised by two **launchd** user agents
-(`com.longitude.pre-bot.gateway` / `…watcher`, `KeepAlive` crash-restart; plists in
-`deploy/launchd/`). The gateway needs its venv on PATH so its bundled Python (3.11 with
+`erikmikkelsen`), supervised by three **launchd** user agents (plists in
+`deploy/launchd/`): `com.longitude.pre-bot.gateway` and `…watcher` (both long-lived, with
+`KeepAlive` crash-restart), plus `…open-house` (a scheduled one-shot, no `KeepAlive`).
+The Mini's clock must be **America/Denver** — the open-house schedule is wall-clock. The gateway needs its venv on PATH so its bundled Python (3.11 with
 `dotenv`/`firecrawl`/`slack_bolt`) is used — `scripts/hermes/start-gateway.sh` handles
 this.
 

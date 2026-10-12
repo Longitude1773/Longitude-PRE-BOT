@@ -12,6 +12,7 @@
     "workflow:approve-eval": "tsx scripts/workflows/approve-eval.ts",
     "workflow:create-zillow-eval": "tsx scripts/workflows/create-zillow-eval.ts",
     "workflow:create-on-demand-eval": "tsx scripts/workflows/create-zillow-eval.ts",
+    "workflow:create-on-demand-eval-manual": "tsx scripts/workflows/create-on-demand-eval-manual.ts",
     "workflow:handle-new-eval": "tsx scripts/workflows/handle-new-eval.ts",
     "workflow:handle-thread-reply": "tsx scripts/workflows/handle-thread-reply.ts",
     "workflow:post-review": "tsx scripts/workflows/post-review.ts",
