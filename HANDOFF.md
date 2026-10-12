@@ -997,8 +997,45 @@ Everything below is done and verified:
       KeepAlive (see "How it runs" above). Custom agents (not `hermes gateway install`,
       which assumes the default `~/.hermes` home, not our managed `.hermes-runtime`).
       Reboots still need one FileVault password entry (see note above).
-- [ ] **Slack scopes** — add `groups:read` (list private channels) and `mpim:history`
-      (multi-person DMs), then reinstall the Slack app. Core posting/DMs already work.
+- [ ] **Slack scopes** — add `users:read`, `groups:read`, `mpim:read`, `mpim:history`, then
+      reinstall. **Started 2026-10-12, parked before any change was made — nothing is
+      half-applied.** Everything needed to resume:
+      - **App is `A0AQHLH1L1F`** in `rootsventurestudio.slack.com` (confirmed from two
+        independent sources: the app id embedded in `.hermes.env`'s `xapp-` token, and the
+        `app_id` on the bot's own messages). Settings:
+        `https://api.slack.com/apps/A0AQHLH1L1F/oauth`
+      - **BLOCKER to resolve first: that URL did not load for the operator.** The app id is
+        correct, so this is an access/session problem — most likely the Slack app was
+        created under a *different* account (the workspace has other members, e.g.
+        `U05BJ31F72Q`/Cameron) and Erik is not a collaborator on it. Next step is
+        `https://api.slack.com/apps` (the app list) to see whether `longitude_str_bot` is
+        even listed. If not: whoever owns the app adds Erik under *Settings →
+        Collaborators*, or makes the change themselves.
+      - **Current state: 13 scopes** — `chat:write`, `chat:write.public`, `files:write`,
+        `files:read`, `channels:history`, `channels:read`, `reactions:read`,
+        `app_mentions:read`, `im:write`, `groups:history`, `im:history`, `im:read`,
+        `incoming-webhook`. Read them live from the `x-oauth-scopes` response header on any
+        API call — there is no scope-listing method.
+      - **Do all four scopes in one pass.** Reinstalling rotates `SLACK_BOT_TOKEN`, so
+        separate trips mean repeated rotations and repeated restarts.
+      - **The rotation checklist** (the bot is down between "Allow" and the restarts):
+        1. `SLACK_BOT_TOKEN` appears **twice and identically** — `.env:33` and
+           `.hermes.env:8`. Both must be updated. Back them up first (`.env.bak*` is
+           gitignored as of `2f23907`).
+        2. **Leave `SLACK_APP_TOKEN` (`xapp-`) alone** — the Socket Mode app-level token is
+           created separately and is *not* rotated by a reinstall.
+        3. Restart both long-lived holders: `launchctl kickstart -k
+           gui/$(id -u)/com.longitude.pre-bot.{gateway,watcher}`. The `mention-alert` job
+           needs nothing — it re-reads `.env` every run.
+        4. Pre-rotation token fingerprint was `sha256[0:16] = 936176960d7eb84c`; confirm it
+           changed.
+      - **Why `users:read` matters:** without it, `users.info` *and* `users.lookupByEmail*`
+        both return `missing_scope`, so no user ID can be resolved to a name from the bot.
+        That is exactly how the liveness alert first got pointed at the wrong person — three
+        different user IDs sit in config (`U053T09V88P` = Erik/operator, `U05BJ31F72Q` =
+        Cameron, `U07UQ0YUTQQ` in `SLACK_ALLOWED_USERS`) and none could be identified
+        without asking. `groups:read` additionally stops a `missing_scope` warning that
+        currently loops in the gateway log on every channel-directory refresh.
 - [ ] **Decommission the laptop** — keep its gateway stopped; two gateways on the same
       Slack app double-respond.
 - [ ] Optional: clean up `.bak` files left under `.hermes-runtime/`, `~/.hermes/`, and
