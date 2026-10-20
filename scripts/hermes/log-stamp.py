@@ -2,7 +2,7 @@
 """Timestamp and de-spam the gateway's log stream.
 
 Sits in the pipe in ``start-gateway.sh``: the gateway's merged stdout/stderr
-flows through here before launchd writes it to ``/tmp/str-bot-gateway.log``.
+flows through here before launchd writes it to ``~/Library/Logs/longitude-pre-bot/str-bot-gateway.log``.
 
 WHY THIS EXISTS, AND WHY IT IS HERE RATHER THAN IN THE FRAMEWORK
 

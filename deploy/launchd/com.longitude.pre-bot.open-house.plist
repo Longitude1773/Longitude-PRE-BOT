@@ -46,8 +46,8 @@
   <false/>
 
   <key>StandardOutPath</key>
-  <string>/tmp/str-open-house.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-open-house.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/str-open-house.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-open-house.log</string>
 </dict>
 </plist>

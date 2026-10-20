@@ -199,7 +199,7 @@ npm run str:start
 
 Then verify in Slack: DM or mention the bot and confirm it replies as **Longitude
 STR Bot** and that it can see recent eval threads. Logs stream to
-`/tmp/str-bot-gateway.log` (and `/tmp/str-mls-watch.log` for the watcher).
+`~/Library/Logs/longitude-pre-bot/str-bot-gateway.log` (and `~/Library/Logs/longitude-pre-bot/str-mls-watch.log` for the watcher).
 
 ## Step 7 — Decommission the old machine
 

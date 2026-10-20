@@ -41,8 +41,8 @@
   <false/>
 
   <key>StandardOutPath</key>
-  <string>/tmp/str-mention-alert.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-mention-alert.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/str-mention-alert.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-mention-alert.log</string>
 </dict>
 </plist>

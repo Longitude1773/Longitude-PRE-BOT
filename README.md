@@ -131,8 +131,8 @@ This launches:
 
 Logs and pid files are written under `/tmp`:
 
-- `/tmp/str-bot-gateway.log`
-- `/tmp/str-mls-watch.log`
+- `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log`
+- `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`
 - `/tmp/str-bot-gateway.pid`
 - `/tmp/str-mls-watch.pid`
 

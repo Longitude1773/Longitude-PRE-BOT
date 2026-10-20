@@ -5,10 +5,11 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_DIR"
 export PROJECT_DIR
 
-GATEWAY_LOG_FILE=/tmp/str-bot-gateway.log
-WATCHER_LOG_FILE=/tmp/str-mls-watch.log
+GATEWAY_LOG_FILE="$HOME/Library/Logs/longitude-pre-bot/str-bot-gateway.log"
+WATCHER_LOG_FILE="$HOME/Library/Logs/longitude-pre-bot/str-mls-watch.log"
 GATEWAY_PID_FILE=/tmp/str-bot-gateway.pid
 WATCHER_PID_FILE=/tmp/str-mls-watch.pid
+mkdir -p "$HOME/Library/Logs/longitude-pre-bot"
 
 pid_is_alive() {
   local pid_file="$1"

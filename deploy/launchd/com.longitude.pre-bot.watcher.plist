@@ -32,8 +32,8 @@
   <integer>15</integer>
 
   <key>StandardOutPath</key>
-  <string>/tmp/str-mls-watch.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-mls-watch.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/str-mls-watch.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-mls-watch.log</string>
 </dict>
 </plist>

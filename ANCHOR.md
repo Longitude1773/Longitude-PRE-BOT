@@ -23,6 +23,15 @@ posts as production.
 2. **MLS watcher** — `scripts/watch-mls.ts`, a persistent Node/tsx process that keeps a
    warm browser session and scans the FlexMLS hot-sheet on a schedule (Mountain-Time
    window, default 07:00–19:00), plus services on-demand eval requests.
+   **It is single-threaded by design: on-demand commands run inline in the scan loop, so one
+   command that never settles stops all scanning** (2026-10-14: six days, live PID). Two
+   guards exist for that and must be kept: every command is bounded by
+   `WATCHER_COMMAND_TIMEOUT_MS` (10 min), and a watchdog restarts the process if the loop
+   makes no progress for `WATCHER_STALL_TIMEOUT_MS` (30 min). Both end in `restartForHang`
+   → Slack alert → kill our Chromium by profile dir → `exit(1)` → launchd restart. Don't
+   rely on Playwright timeouts alone: `page.evaluate`, `bringToFront`, `page.content()` and
+   CDP sends ignore `setDefaultTimeout`. It also prunes its debug snapshots daily
+   (`scripts/prune-debug-artifacts.ts`; html-debug 7d, mhtml 14d, healing-queue refs kept).
 
 **On the Mini (production) both are supervised by launchd — do NOT start them by hand.**
 `npm run str:start` / `npm run hermes:start` would spawn a *second* gateway alongside the
@@ -49,7 +58,7 @@ exit, so a `-` in the PID column is healthy, not a crash:
   stall alert" below.
 
 The `npm run` scripts remain the right entry point on a **dev machine** with no launchd
-agents loaded. Logs (both cases): `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
+agents loaded. Logs (both cases): `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log`, `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`.
 See `HANDOFF.md` → "How it runs (launchd-managed)" for the full control surface.
 
 ## Stack decisions (the "why")
@@ -172,7 +181,7 @@ Decision logic is in `scripts/app-mention-alert-lib.ts` with 25 tests in
 `app-mention-alert-lib.test.ts` (wired into `autoresearch.checks.sh`) — the live channel had
 no unanswered mentions to test against, so both failure paths are covered synthetically.
 Check by hand without posting: `npm run mention-alert -- --dry-run`.
-Log: `/tmp/str-mention-alert.log`.
+Log: `~/Library/Logs/longitude-pre-bot/str-mention-alert.log`.
 
 ## Scheduled job: the pipeline stall alert
 
@@ -221,7 +230,7 @@ Decision logic is in `scripts/pipeline-alert-lib.ts` with 27 tests in
 signatures and the holds-are-not-failures false positive. Check by hand without posting:
 `npm run pipeline-alert -- --dry-run`. Test against a fixture with
 `--state-file` / `--alert-state-file` rather than editing the live watcher state.
-Log: `/tmp/str-pipeline-alert.log`.
+Log: `~/Library/Logs/longitude-pre-bot/str-pipeline-alert.log`.
 
 ## Scheduled job: the weekly open-house tracker
 
@@ -287,7 +296,7 @@ conversational work, even though generating it was free.
 npx tsx scripts/open-house-tracker.ts --dry-run    # FlexMLS + Supabase read only → CSV, writes nothing
 npx tsx scripts/open-house-tracker.ts --date 2026-10-14 --no-evals --no-slack
 ```
-Logs: `/tmp/str-open-house.log`. Status: `launchctl list | grep open-house` (a `-` in the
+Logs: `~/Library/Logs/longitude-pre-bot/str-open-house.log`. Status: `launchctl list | grep open-house` (a `-` in the
 PID column is normal — it only lives for the duration of a run).
 
 ## Key invariants — do not violate

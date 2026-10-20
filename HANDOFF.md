@@ -4,7 +4,71 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-10-12 — Slack "Provider authentication failed" = Codex quota, NOT auth
+## Current status — 2026-10-20 — watcher hung 6 days on one Zillow scrape (fixed + guarded)
+
+**Symptom:** the pipeline stall alert (`heartbeat-stale`) posted every 6h from Oct 14 on.
+`launchctl list` showed the watcher with a live PID the whole time; `mls-watch-state.json`
+was last written **2026-10-14 10:21:56 MT**.
+
+**Cause: one Zillow scrape command never settled.** The last log line before the freeze is
+`10:51:41 MT handling zillow scrape command … 1399-Park-Ave-1` (a Slack request at 10:50).
+Commands run inline in the watcher's single loop (`processWatcherCommands` is awaited from
+the main loop *and* from every 2s idle slice), so that one await blocked every later scan
+and every later request for six days. Node sat at 0% CPU awaiting a promise; one Chromium
+renderer had burned ~750 CPU-minutes — a wedged page. The Zillow page *does* get
+`setDefaultTimeout(20000)` (in `getZillowWarmPage`), but `page.evaluate` (used by
+`isZillowBlocked` / extraction), `bringToFront`, `page.content()` and CDP sends (MHTML
+export) ignore it, and the Supabase status write had no timeout either. Which one hung is
+not provable after the fact; the fix doesn't depend on knowing.
+
+**Fix (in `scripts/watch-mls.ts`), two layers:**
+- `runCommandWithTimeout` — every command is raced against `WATCHER_COMMAND_TIMEOUT_MS`
+  (default **10 min**; measured maxima: MLS scrape 34s, open-house report 3.8 min, Zillow
+  by design ≤ ~5 min incl. the 3-min captcha wait). On timeout it writes an `ok:false`
+  command result, marks the on-demand request failed, then restarts.
+- A loop watchdog (`setInterval`, 60s) — if `markLoopProgress` hasn't been stamped for
+  `WATCHER_STALL_TIMEOUT_MS` (default **30 min**), restart. Catches a hang inside
+  `scanOnce` too, not just commands.
+- `restartForHang` posts a Slack alert, closes sessions (bounded 15s — a wedged renderer can
+  hang `close()`), then `pkill -9 -f user-data-dir=<profile>` for all three profiles,
+  then `exit(1)` for launchd `KeepAlive`. The pkill matters: Playwright starts Chromium in
+  its **own process group**, so launchd won't reap it, and a surviving browser holds the
+  profile lock the next launch needs. Verified the pattern matches the live FlexMLS
+  Chromium and Zillow Chrome and not the personal Chrome. Verified the timeout → result →
+  bounded-close → `exit 1` path with a scratch harness (never-settling command *and*
+  never-settling `close()`): exit after ~17s.
+
+**Nothing to re-run.** The 4 commands queued behind the hang were set aside to
+`data/inbox/mls-commands.jsonl.stale-20261020` before the restart. Both properties were
+already handled by hand in Slack while the watcher was down: 1399 Park Ave #1 got an
+approved PRE on 10-14 (from the Unit 5 FlexMLS link), and 2344 W 3000 S (MLS 12503957)
+got the standard PRE at Balanced $575,000 on 10-19 (thread `1792434650.547599` in
+`#team-pre-requests`). After restart the first scan posted the 7 evals that had backed up.
+
+**Also changed this session:**
+- **Logs moved out of `/tmp` → `~/Library/Logs/longitude-pre-bot/`** (same filenames). macOS
+  `periodic` deletes `/tmp` files whose atime/mtime/ctime are all > 3 days old, i.e.
+  exactly the log of a process that has stalled — `/tmp/str-mls-watch.log` was unlinked
+  mid-incident. All 5 plists updated and reinstalled, existing logs moved, docs/alert text
+  updated. Note the watcher *also* writes `data/inbox/mls-watch.log` (via `logLine`),
+  which was never at risk. Neither location rotates; the gateway log is ~315 MB, almost all
+  `Session is closed` noise.
+- **Debug snapshot pruning** — `scripts/prune-debug-artifacts.ts` (`--dry-run` supported).
+  `html-debug` had 609k files / 52 GB, never cleaned. Keeps html-debug 7 days, mhtml 14
+  days, and **always keeps any mhtml the link-healing queue references** (heal-mls-links
+  re-reads them; refs go back to July). The watcher runs it in the background once per 24h
+  (first loop after start). First run freed ~57 GB.
+- **Recovering a deleted-but-open log:** `kill -USR1 <node pid>` opens the inspector on
+  `127.0.0.1:9229`; `Runtime.evaluate` of
+  `process.getBuiltinModule('fs').copyFileSync('/dev/fd/1', '<out>')` copies the
+  process's own stdout file. Harmless to the running process.
+
+**Found, not fixed:** `on_demand_requests` does not exist in Supabase (PostgREST
+`PGRST205`; it suggests `eval_requests`). Every `markOnDemandRequestForCommand` call fails
+and is swallowed by `.catch(() => {})`, so request status tracking is silently a no-op.
+`sql/2026-04-14-on-demand-requests.sql` has never been applied (or was dropped).
+
+## Previous status — 2026-10-12 — Slack "Provider authentication failed" = Codex quota, NOT auth
 
 **Symptom:** every bot request in Slack returns
 `⚠️ Provider authentication failed. Check the configured credentials; raw provider details
@@ -188,7 +252,7 @@ log, and it is on the pending-scopes list above.
 
 The 09-11 section below says `Session is closed` "does not exist in this build and returns
 0" and recommends a climbing `Socket Mode unhealthy` count as the gateway health signal.
-**That is now wrong.** As of this session `/tmp/str-bot-gateway.log` contains **721,686**
+**That is now wrong.** As of this session `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log` contains **721,686**
 occurrences of `Session is closed` — it *is* the log, ~198 MB of it — from a dead secondary
 aiohttp session retrying with **no backoff** since roughly the Sep 30 restart. Slack events
 flow fine throughout (all 5 evals posted), so it is pure noise and useless as a health
@@ -208,7 +272,7 @@ process came up (the last 6 belong to the old one shutting down), and log growth
 from roughly 16 MB/day of pure spam to ~8 KB/min of ordinary output. So the fix for this is
 simply *restart the gateway* — but it will recur whenever that session dies again, since
 nothing adds backoff to the reconnect. Still open: rotate/truncate the 198 MB
-`/tmp/str-bot-gateway.log` (it is append-mode, so the old bulk is still there), and add
+`~/Library/Logs/longitude-pre-bot/str-bot-gateway.log` (it is append-mode, so the old bulk is still there), and add
 backoff so a future occurrence can't run away.
 
 This is what motivated building the "unanswered `app_mention`" alert this session — it was
@@ -307,7 +371,7 @@ Smaller notes:
 - The `open-house-tracker.ts` docstring refers to plists plural
   (`com.longitude.pre-bot.open-house-*.plist`); there is actually **one** plist with two
   `StartCalendarInterval` entries.
-- `/tmp/str-open-house.log` did not exist as of this session even though runs have happened
+- `~/Library/Logs/longitude-pre-bot/str-open-house.log` did not exist as of this session even though runs have happened
   — launchd only creates it on a run it owns, so don't read its absence as "never ran". The
   ledgers in `data/open-house/` are the reliable history.
 - Idempotency protects manual edits: `planSheetMerge` only touches cells that are blank,
@@ -457,7 +521,7 @@ Also: `grep` patterns matching `app_mention` will match the **`missing_scope` sp
 scope string literally contains `app_mentions:read`), which floods `tail`. Always filter:
 
 ```bash
-grep -vE "missing_scope|channel_directory|server responded" /tmp/str-bot-gateway.log | tail -40
+grep -vE "missing_scope|channel_directory|server responded" ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log | tail -40
 ```
 
 That `missing_scope: groups:read` line repeats every few seconds forever — a channel-directory
@@ -562,8 +626,8 @@ code. **If credentials ever change again, deleting the profiles is mandatory, no
 - Stored `listing_url`s were checked and are **safe**: 1,354 of 1,360 use the canonical
   `flexmls.com/share/<code>/…` form, which is not tied to an agent slug. Only 1 row points
   at a `CameronBrockbank` share link. No link-rot cleanup needed.
-- Still unconfirmed: a post-restart `heartbeat loggedIn=true` line in `/tmp/str-mls-watch.log`
-  on the Mini. Worth a `grep heartbeat /tmp/str-mls-watch.log | tail -3` to close out.
+- Still unconfirmed: a post-restart `heartbeat loggedIn=true` line in `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`
+  on the Mini. Worth a `grep heartbeat ~/Library/Logs/longitude-pre-bot/str-mls-watch.log | tail -3` to close out.
 
 ### Gateway model outage — `gpt-5.5` (FIXED, and it will recur)
 
@@ -572,7 +636,7 @@ every mention. Initial projections still posted, because `handle-new-eval.ts` un
 deterministically from `market-knowledge.md` with no LLM — **only the conversational paths
 (adjustments, pasted links) broke.** That split is the tell for a model-layer failure.
 
-The real error, only in `/tmp/str-bot-gateway.log`:
+The real error, only in `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log`:
 
 ```
 provider=openai-codex base_url=https://chatgpt.com/backend-api/codex model=gpt-5.4
@@ -793,7 +857,7 @@ The signal that actually distinguishes the two states is the reconnect loop in t
 
 ```bash
 # sample twice — a climbing count means the socket is dead and needs a kickstart
-grep -c 'Session is closed' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' /tmp/str-bot-gateway.log
+grep -c 'Session is closed' ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log; sleep 30; grep -c 'Session is closed' ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log
 ```
 
 > ⚠️ **2026-09-11: `Session is closed` no longer appears in this build.** It returns `0`
@@ -970,12 +1034,12 @@ python3 -c "import json;d=json.load(open('.hermes-runtime/gateway_state.json'))[
 # means the socket is dropping events and only a kickstart will fix it.
 # NOTE (2026-09-11): the string is 'Socket Mode unhealthy'. The older 'Session is closed'
 # does not appear in this build and returns 0 even while the socket is cycling.
-grep -c 'Socket Mode unhealthy' /tmp/str-bot-gateway.log; sleep 30; grep -c 'Socket Mode unhealthy' /tmp/str-bot-gateway.log
+grep -c 'Socket Mode unhealthy' ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log; sleep 30; grep -c 'Socket Mode unhealthy' ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log
 
-tail -f /tmp/str-bot-gateway.log   # and /tmp/str-mls-watch.log
+tail -f ~/Library/Logs/longitude-pre-bot/str-bot-gateway.log   # and ~/Library/Logs/longitude-pre-bot/str-mls-watch.log
 ```
 
-Logs stream to `/tmp/str-bot-gateway.log` and `/tmp/str-mls-watch.log`.
+Logs stream to `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log` and `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`.
 
 **Reboot persistence + FileVault:** FileVault is ON, so after a reboot/power-loss the
 encrypted disk stays locked until someone enters the FileVault password at the boot

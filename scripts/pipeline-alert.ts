@@ -172,7 +172,7 @@ async function main() {
       detail:
         `\`data/inbox/mls-watch-state.json\` is missing or unreadable. The watcher writes it every cycle, ` +
         "so either it has never run here or the inbox was cleared. Check " +
-        "`launchctl list | grep longitude.pre-bot` and `/tmp/str-mls-watch.log`.",
+        "`launchctl list | grep longitude.pre-bot` and `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`.",
     });
   } else {
     sample = sampleFrom(watchState, now);

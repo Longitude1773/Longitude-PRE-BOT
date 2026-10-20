@@ -44,8 +44,8 @@
   <false/>
 
   <key>StandardOutPath</key>
-  <string>/tmp/str-pipeline-alert.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-pipeline-alert.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/str-pipeline-alert.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-pipeline-alert.log</string>
 </dict>
 </plist>

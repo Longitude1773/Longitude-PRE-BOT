@@ -57,7 +57,7 @@ launchctl kickstart -k gui/$(id -u)/com.longitude.pre-bot.watcher   # restart wa
 launchctl bootout      gui/$(id -u)/com.longitude.pre-bot.gateway   # stop until next load/reboot
 ```
 
-Logs: `/tmp/str-bot-gateway.log`, `/tmp/str-mls-watch.log`.
+Logs: `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log`, `~/Library/Logs/longitude-pre-bot/str-mls-watch.log`.
 
 ## Weekly open-house tracker (`com.longitude.pre-bot.open-house.plist`)
 
@@ -73,7 +73,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.longitude.pre-bot.op
 launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.open-house   # run once now (optional)
 ```
 
-Log: `/tmp/str-open-house.log`. Run records: `data/open-house/<YYYY-MM-DD>.json`.
+Log: `~/Library/Logs/longitude-pre-bot/str-open-house.log`. Run records: `data/open-house/<YYYY-MM-DD>.json`.
 
 ## Gateway liveness alert (`com.longitude.pre-bot.mention-alert.plist`)
 
@@ -99,7 +99,7 @@ launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.mention-alert   # run onc
 ```
 
 Check it by hand without posting anything: `npm run mention-alert -- --dry-run`.
-Log: `/tmp/str-mention-alert.log`. Logic + tests: `scripts/app-mention-alert-lib{,.test}.ts`.
+Log: `~/Library/Logs/longitude-pre-bot/str-mention-alert.log`. Logic + tests: `scripts/app-mention-alert-lib{,.test}.ts`.
 
 Dedup state: `data/inbox/app-mention-alert-state.json`. Note the two modes — **deleting**
 the file makes the next run a *first run*, which re-seeds and alerts on nothing (that is the
@@ -142,7 +142,7 @@ launchctl kickstart gui/$(id -u)/com.longitude.pre-bot.pipeline-alert   # run on
 ```
 
 Check by hand without posting: `npm run pipeline-alert -- --dry-run`.
-Log: `/tmp/str-pipeline-alert.log`. State: `data/inbox/pipeline-alert-state.json` (sample
+Log: `~/Library/Logs/longitude-pre-bot/str-pipeline-alert.log`. State: `data/inbox/pipeline-alert-state.json` (sample
 history + per-signal cooldown stamps). Logic + tests: `scripts/pipeline-alert-lib{,.test}.ts`.
 
 **Testing against a fixture** — do not hand-edit the live watcher state, which the watcher

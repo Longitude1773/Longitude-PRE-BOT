@@ -176,7 +176,7 @@ export function detect(opts: { state: WatchState; samples: Sample[]; now: Date; 
           `No watcher heartbeat for ${Math.round(staleMin)} min (threshold ${Math.round(thresholdMin)} min = ` +
           `${config.staleCycles}× the ${Math.round(config.intervalSeconds / 60)} min cycle). ` +
           `Last state write: ${state.updatedAt || "never"}. Check \`launchctl list | grep longitude.pre-bot\` ` +
-          "and `/tmp/str-mls-watch.log` — note the process can be alive and still not working.",
+          "and `~/Library/Logs/longitude-pre-bot/str-mls-watch.log` — note the process can be alive and still not working.",
       });
     }
   }
@@ -190,7 +190,7 @@ export function detect(opts: { state: WatchState; samples: Sample[]; now: Date; 
       detail:
         `The queue retained ${f.survivors} item(s): ${f.holds} normal hold(s) and ${f.failures} failure(s). ` +
         `This is the 2026-08-10 signature — ready listings failing their write and re-queueing every cycle, ` +
-        "which ran 4 days unnoticed. Check `/tmp/str-mls-watch.log` for the per-listing error.",
+        "which ran 4 days unnoticed. Check `~/Library/Logs/longitude-pre-bot/str-mls-watch.log` for the per-listing error.",
     });
   }
 

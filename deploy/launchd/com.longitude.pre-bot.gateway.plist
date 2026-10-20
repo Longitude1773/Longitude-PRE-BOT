@@ -32,8 +32,8 @@
   <integer>15</integer>
 
   <key>StandardOutPath</key>
-  <string>/tmp/str-bot-gateway.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-bot-gateway.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/str-bot-gateway.log</string>
+  <string>/Users/erikmikkelsen/Library/Logs/longitude-pre-bot/str-bot-gateway.log</string>
 </dict>
 </plist>

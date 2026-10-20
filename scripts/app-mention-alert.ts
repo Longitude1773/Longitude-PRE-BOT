@@ -246,7 +246,7 @@ async function main() {
       lines.push(`• _${describeAge(u.message.ts, nowSeconds)}_: "${neutralize(u.message.text, botUserId).slice(0, 140)}"${link}`);
     }
     if (newUnanswered.length > 5) lines.push(`• …and ${newUnanswered.length - 5} more`);
-    lines.push("_Check `launchctl list | grep longitude.pre-bot`, then `/tmp/str-bot-gateway.log` (filter out `Session is closed`)._");
+    lines.push("_Check `launchctl list | grep longitude.pre-bot`, then `~/Library/Logs/longitude-pre-bot/str-bot-gateway.log` (filter out `Session is closed`)._");
   }
 
   if (newErrored.length > 0) {
