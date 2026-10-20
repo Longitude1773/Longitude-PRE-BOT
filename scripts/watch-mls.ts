@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { mkdir, appendFile, writeFile, readFile, rename } from "node:fs/promises";
 import { resolve } from "node:path";
 import { type BrowserContext, type Frame, type Page } from "playwright";
@@ -92,6 +92,15 @@ import { readSheet } from "./sheets.ts";
 let twoFactorAlertActive = false;
 let twoFactorAlertRequestedAt = "";
 let shuttingDown = false;
+// Hang guards (2026-10-20). A page call that never settles — page.evaluate,
+// bringToFront and CDP sends ignore setDefaultTimeout — once froze this loop for
+// six days with a live PID. Bound every command, and restart the whole process
+// (launchd KeepAlive) when the loop stops making progress at all.
+const commandTimeoutMs = Number(process.env.WATCHER_COMMAND_TIMEOUT_MS || String(10 * 60_000));
+const loopStallTimeoutMs = Number(process.env.WATCHER_STALL_TIMEOUT_MS || String(30 * 60_000));
+let lastLoopProgressAt = Date.now();
+let lastLoopProgressLabel = "startup";
+const managedSessions: ManagedBrowserContext[] = [];
 let mlsOnDemandSession: ManagedBrowserContext | null = null;
 let mlsOnDemandSessionPromise: Promise<ManagedBrowserContext> | null = null;
 
@@ -178,6 +187,79 @@ async function logLine(message: string) {
   const line = `${new Date().toISOString()} ${message}\n`;
   await appendFile(heartbeatLog, line);
   process.stdout.write(line);
+}
+
+function markLoopProgress(label: string) {
+  lastLoopProgressAt = Date.now();
+  lastLoopProgressLabel = label;
+}
+
+function settleWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([promise, new Promise<undefined>((done) => setTimeout(done, ms))]);
+}
+
+/**
+ * Last resort when something in the browser has wedged: post why, close the
+ * browsers (bounded — a hung renderer can hang close() too), kill anything
+ * still holding our profiles so the next launch can take the profile lock,
+ * and exit non-zero for launchd to restart us. Playwright starts Chromium in
+ * its own process group, so launchd will not reap it on our exit.
+ */
+let restarting = false;
+async function restartForHang(reason: string): Promise<never> {
+  if (!restarting) {
+    restarting = true;
+    shuttingDown = true;
+    await settleWithin(logLine(`mls watcher: HANG — ${reason}; restarting the process`), 5_000).catch(() => {});
+    await settleWithin(
+      postSlackAlert(`MLS watcher hang detected — ${reason}. Restarting the watcher now; it will resume scanning on its own.`),
+      15_000,
+    ).catch(() => {});
+    await settleWithin(Promise.allSettled(managedSessions.map((session) => session.close())), 15_000);
+    for (const dir of [profileDir, mlsOnDemandProfileDir, zillowProfileDir]) {
+      spawnSync("pkill", ["-9", "-f", `user-data-dir=${dir}`]);
+    }
+  }
+  process.exit(1);
+}
+
+/** Bound one watcher command; on timeout, record the failure, then restart. */
+async function runCommandWithTimeout(command: MlsCommand, run: () => Promise<void>) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timeout">((done) => {
+    timer = setTimeout(() => done("timeout"), commandTimeoutMs);
+  });
+  const outcome = await Promise.race([run().then(() => "done" as const), timedOut]);
+  clearTimeout(timer);
+  if (outcome === "done") return;
+
+  const minutes = Math.round(commandTimeoutMs / 60_000);
+  const target = "url" in command ? command.url : "date" in command ? command.date : "";
+  const error = `Watcher command timed out after ${minutes} min (${command.type} ${target}); the watcher restarted. Retry the request.`;
+  if (command.type !== "submit_2fa_code") {
+    await settleWithin(
+      appendCommandResult({ commandId: command.id, ok: false, action: command.type, createdAt: new Date().toISOString(), error }),
+      5_000,
+    ).catch(() => {});
+  }
+  if ("requestKey" in command && command.requestKey) {
+    await settleWithin(
+      markOnDemandRequestForCommand({ requestKey: command.requestKey, commandId: command.id, status: "failed", error }),
+      10_000,
+    ).catch(() => {});
+  }
+  await restartForHang(`${command.type} id=${command.id} ${target} exceeded ${minutes} min`);
+}
+
+/** Once a day, prune old debug snapshots in the background (never blocks a scan). */
+let lastDebugPruneAt = 0;
+function maybePruneDebugArtifacts() {
+  if (Date.now() - lastDebugPruneAt < 24 * 60 * 60 * 1000) return;
+  lastDebugPruneAt = Date.now();
+  execFile("npx", ["tsx", "scripts/prune-debug-artifacts.ts"], { cwd: repoRoot, timeout: 15 * 60_000 }, (error, stdout) => {
+    const summary = stdout.trim().split("\n").pop() || "";
+    void logLine(`mls watcher: debug prune ${error ? `error=${error.message}` : summary}`).catch(() => {});
+  });
 }
 
 async function saveState(payload: Record<string, unknown>) {
@@ -391,6 +473,7 @@ async function ensureMlsOnDemandSession() {
     mlsOnDemandSessionPromise = launchMlsOnDemandContext()
       .then((session) => {
         mlsOnDemandSession = session;
+        managedSessions.push(session);
         return session;
       })
       .finally(() => {
@@ -1151,21 +1234,24 @@ async function processWatcherCommands(
 ) {
   const commands = await drainCommands(["scrape_zillow_listing", "scrape_mls_listing", "read_open_house_report"]);
   for (const command of commands) {
-    if (command.type === "scrape_zillow_listing") {
-      await handleScrapeZillowListingCommand(zillowContext, command);
-    } else if (command.type === "read_open_house_report") {
-      // Runs on the main scan page: the next scan re-navigates to the hot sheet
-      // from wherever this leaves it (scanOnce always logs in + warms first).
-      await handleReadOpenHouseReportCommand(basePage, command);
-    } else if (command.type === "scrape_mls_listing") {
-      if (mlsOnDemandBrowserBackend === mlsBrowserBackend) {
-        await handleScrapeMlsListingCommand(mlsContext, basePage, command);
-      } else {
-        const onDemandSession = await ensureMlsOnDemandSession();
-        const onDemandPage = await getPage(onDemandSession.context);
-        await handleScrapeMlsListingCommand(onDemandSession.context, onDemandPage, command);
+    markLoopProgress(`command ${command.type} id=${command.id}`);
+    await runCommandWithTimeout(command, async () => {
+      if (command.type === "scrape_zillow_listing") {
+        await handleScrapeZillowListingCommand(zillowContext, command);
+      } else if (command.type === "read_open_house_report") {
+        // Runs on the main scan page: the next scan re-navigates to the hot sheet
+        // from wherever this leaves it (scanOnce always logs in + warms first).
+        await handleReadOpenHouseReportCommand(basePage, command);
+      } else if (command.type === "scrape_mls_listing") {
+        if (mlsOnDemandBrowserBackend === mlsBrowserBackend) {
+          await handleScrapeMlsListingCommand(mlsContext, basePage, command);
+        } else {
+          const onDemandSession = await ensureMlsOnDemandSession();
+          const onDemandPage = await getPage(onDemandSession.context);
+          await handleScrapeMlsListingCommand(onDemandSession.context, onDemandPage, command);
+        }
       }
-    }
+    });
   }
 }
 
@@ -3170,6 +3256,7 @@ async function sleepWithCommandProcessing(
   const sliceMs = 2000;
   const startedAt = Date.now();
   while (!shuttingDown && Date.now() - startedAt < totalMs) {
+    markLoopProgress("idle");
     await processWatcherCommands(mlsContext, page, zillowContext);
     const remainingMs = totalMs - (Date.now() - startedAt);
     if (remainingMs <= 0) break;
@@ -3193,6 +3280,13 @@ async function main() {
   const context = mlsSession.context;
   const zillowSession = await launchZillowContext();
   const zillowContext = zillowSession.context;
+  managedSessions.push(mlsSession, zillowSession);
+  setInterval(() => {
+    const stalledMs = Date.now() - lastLoopProgressAt;
+    if (stalledMs > loopStallTimeoutMs) {
+      void restartForHang(`main loop made no progress for ${Math.round(stalledMs / 60_000)} min (last step: ${lastLoopProgressLabel})`);
+    }
+  }, 60_000).unref();
   await hardenZillowContext(zillowContext);
 
   const page = await getPage(context);
@@ -3235,12 +3329,16 @@ async function main() {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   while (true) {
+    markLoopProgress("loop start");
+    maybePruneDebugArtifacts();
     try {
       await processWatcherCommands(context, page, zillowContext);
       const now = new Date();
       const withinWindow = isWithinScanWindow(now);
       if (scanEnabled && withinWindow) {
+        markLoopProgress("scan");
         await scanOnce(page);
+        markLoopProgress("scan done");
         await processWatcherCommands(context, page, zillowContext);
         if (twoFactorAlertActive && (await looksLoggedIn(page))) {
           twoFactorAlertActive = false;
