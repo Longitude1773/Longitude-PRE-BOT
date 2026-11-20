@@ -69,7 +69,7 @@ The Supabase Postgres database has 5 tables (accessible via the Table Editor das
 ### Adjustments
 | Adj ID | Eval ID | MLS # | Timestamp | Requested By | Request Text | Category | Prior High | Prior Med | Prior Low | New High | New Med | New Low | Delta % | Reasoning |
 
-Categories: `revenue`, `adr`, `occupancy`, `classification-tier`, `classification-market`, `classification-amenities`, `general-direction`
+Categories: `revenue`, `adr`, `occupancy`, `classification-tier`, `classification-market`, `classification-amenities`, `general-direction`, `seasonality`
 
 How to pick a category:
 - `revenue` / `adr` / `occupancy` — the correction targets that specific metric. Default to `revenue` when the user is moving bottom-line numbers ("bump everything down 10%", "balanced should be $60K").
@@ -77,6 +77,7 @@ How to pick a category:
 - `classification-market` — user is correcting the market or sub-market assignment.
 - `classification-amenities` — user is correcting the primary or secondary amenity assessment.
 - `general-direction` — qualitative reasoning that doesn't map cleanly to a metric ("premium finishes weren't accounted for").
+- `seasonality` — reviewer picked a monthly curve ("approve ski-heavy", "summer-heavy"). Annual figures are unchanged; only the monthly split moves. Curves live in `scripts/workflows/seasonality.ts`.
 
 This tab builds a training set over time. When generating future projections, read past adjustments to identify systematic biases (e.g. if premium-finish properties consistently get bumped 15-20%, bake that into the initial estimate for similar properties).
 

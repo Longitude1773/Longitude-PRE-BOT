@@ -219,7 +219,20 @@ export async function createAgentTaskForListing(
   // --- Idempotency: a task already exists for this eval row --------------
   // `hubspot_task_id` may not exist yet if the migration hasn't been run; a
   // missing property simply reads as undefined and we proceed (best-effort).
-  const existingTaskId = text(evaluation.hubspot_task_id);
+  let existingTaskId = text(evaluation.hubspot_task_id);
+  // A re-approval after an adjustment or reshape writes a new version row in
+  // the same Slack thread; that is the same PRE, so one task is enough.
+  // Separate threads for the same MLS are separate evaluations and still get one.
+  const slackTimestamp = text(evaluation.slack_timestamp);
+  if (!existingTaskId && slackTimestamp) {
+    const { data: siblings, error } = await supabase
+      .from("evaluations")
+      .select("eval_id, hubspot_task_id")
+      .eq("slack_timestamp", slackTimestamp)
+      .not("hubspot_task_id", "is", null);
+    if (error) throw new Error(`Supabase sibling-version lookup failed: ${error.message}`);
+    existingTaskId = text(siblings?.find((row) => text(row.hubspot_task_id))?.hubspot_task_id);
+  }
   if (existingTaskId) {
     say(`Skip: eval ${evalId} already has HubSpot task ${existingTaskId}.`);
     return {

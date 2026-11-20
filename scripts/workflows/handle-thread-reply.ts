@@ -1,14 +1,13 @@
 import { spawnSync } from "node:child_process";
 
+import type { EvalData } from "../write-sheet-data.ts";
 import { reply } from "../slack.ts";
 import {
-  applyStructuredAdjustment,
   asNumber,
   asString,
   buildProjectionReply,
   cloneEvalData,
   logSlackEvent,
-  parseAdjustmentRequest,
   resolveEvaluationByMls,
   resolveEvaluationByThread,
   saveEvalData,
@@ -17,9 +16,10 @@ import {
   updateEvaluationSummaryRow,
   writeEvaluationVersion,
   type AdjustmentCategory,
+  type EvalSheetRow,
 } from "./lib.ts";
-import { loadMarketKnowledge } from "./market-knowledge.ts";
-import { applyTierCorrection, parseTierCorrection, TierCorrectionError } from "./tier-correction.ts";
+import { applyReplyAdjustments, isAdjustmentReply } from "./reply-adjustments.ts";
+import { applySeasonalityProfile, parseSeasonalityProfile, SEASONALITY_LABEL } from "./seasonality.ts";
 
 function argValue(flag: string) {
   const index = process.argv.indexOf(flag);
@@ -30,10 +30,90 @@ function classify(text: string) {
   const lower = text.toLowerCase();
   if (/\bapprove(d)?\b/.test(lower)) return "approve";
   if (/\bdismiss(ed)?\b|\breject(ed)?\b/.test(lower)) return "dismiss";
-  if (parseTierCorrection(text)) return "adjust";
-  const adjustment = parseAdjustmentRequest(text);
-  if (adjustment.kind === "ok" || adjustment.kind === "clarify") return "adjust";
+  if (isAdjustmentReply(text)) return "adjust";
   return "question";
+}
+
+type ReplyContext = {
+  channel: string;
+  targetThreadTs: string;
+  user: string;
+  text: string;
+  eventPath: string;
+  row: EvalSheetRow;
+  path: string;
+};
+
+// Save an adjusted eval as the next version (pending review), log it to
+// Adjustments, and optionally post the updated projections to the thread.
+async function persistAdjustedVersion(
+  ctx: ReplyContext,
+  data: EvalData,
+  before: EvalData,
+  change: { category: AdjustmentCategory; reasoning: string; action: string; postReply: boolean },
+) {
+  const { row } = ctx;
+  await saveEvalData(ctx.path, data);
+  await writeEvaluationVersion(data, {
+    source: asString((row as any)["Listing Source"] || "new_listing"),
+    version: String(asNumber(row.Version) + 1),
+    status: "pending_review",
+    "slack-ts": ctx.targetThreadTs,
+    // Carry an existing R2 key forward (re-eval of an approved row); leave
+    // null for still-pending rows. Never re-introduce a local path.
+    "pdf-path": asString(row["PDF Path"]) || undefined,
+  });
+  await upsertAdjustmentForMls({
+    evalId: asString(row["Eval ID"]),
+    mlsNumber: asString(row["MLS #"]),
+    requestedBy: ctx.user,
+    requestText: ctx.text,
+    category: change.category,
+    reasoning: change.reasoning,
+    after: data,
+    fallbackBefore: before,
+    classification: {
+      market: asString(data.market),
+      subMarket: asString(data.subMarket),
+      luxuryTier: asString(data.luxuryTier),
+      amenities: data.amenities || { primary: [], secondary: [] },
+    },
+  });
+  if (change.postReply) await reply(ctx.channel, ctx.targetThreadTs, buildProjectionReply(data, change.reasoning));
+  if (ctx.targetThreadTs) {
+    const latest = await resolveEvaluationByThread(ctx.targetThreadTs);
+    if (latest) {
+      await upsertThreadContext({
+        threadTs: ctx.targetThreadTs,
+        row: latest.row,
+        data: latest.data,
+        slackChannelId: ctx.channel,
+        event: {
+          kind: "thread-reply",
+          action: change.action,
+          user: ctx.user,
+          text: ctx.text,
+          note: change.reasoning,
+          status: asString(latest.row.Status),
+          version: asNumber(latest.row.Version),
+          eventPath: ctx.eventPath,
+        },
+      });
+    }
+  }
+}
+
+function projectionSummary(data: EvalData) {
+  return {
+    luxuryTier: data.luxuryTier,
+    seasonalityProfile: data.seasonalityProfile || "standard",
+    revenue: {
+      optimized: data.projections?.high.revenue,
+      balanced: data.projections?.medium.revenue,
+      conservative: data.projections?.low.revenue,
+    },
+    balancedMonthly: data.projections?.medium.monthly.map((m) => m.revenue),
+  };
 }
 
 async function main() {
@@ -54,9 +134,29 @@ async function main() {
 
   const { row, path, data } = resolved;
   const targetThreadTs = threadTs || asString(row["Slack Timestamp"]);
+  const ctx: ReplyContext = { channel, targetThreadTs, user, text, eventPath, row, path };
   const action = classify(text);
 
   if (action === "approve") {
+    // "approve ski-heavy" / "approve summer-heavy": reshape the months first,
+    // save that as the next version, then approve it. Straight to the PDF;
+    // annual figures do not change, so there is nothing new to review.
+    const season = parseSeasonalityProfile(text);
+    if (season?.kind === "clarify") {
+      if (!dryRun) await reply(channel, targetThreadTs, `${season.message} Nothing was approved yet.`);
+      console.log(JSON.stringify({ ok: true, action: "approve_clarify", message: season.message, threadTs: targetThreadTs, mlsNumber: data.mlsNumber, eventPath, dryRun }, null, 2));
+      return;
+    }
+    let reshape: { reasoning: string } | undefined;
+    if (season?.kind === "ok") {
+      const before = cloneEvalData(data);
+      reshape = applySeasonalityProfile(data, season.profile);
+      if (!dryRun) {
+        await reply(channel, targetThreadTs, `Applied the ${SEASONALITY_LABEL[season.profile]} seasonality curve (annual totals unchanged). Generating the PDF…`);
+        await persistAdjustedVersion(ctx, data, before, { category: "seasonality", reasoning: reshape.reasoning, action: "approve_reshape", postReply: false });
+      }
+    }
+
     if (!dryRun) {
       const result = spawnSync("npx", ["tsx", "scripts/workflows/approve-eval.ts", "--channel", channel, "--thread-ts", targetThreadTs, "--user", user], {
         cwd: process.cwd(),
@@ -87,7 +187,16 @@ async function main() {
       }
     }
 
-    console.log(JSON.stringify({ ok: true, action, threadTs: targetThreadTs, mlsNumber: data.mlsNumber, eventPath, dryRun }, null, 2));
+    console.log(JSON.stringify({
+      ok: true,
+      action,
+      reasoning: reshape?.reasoning,
+      ...(reshape ? projectionSummary(data) : {}),
+      threadTs: targetThreadTs,
+      mlsNumber: data.mlsNumber,
+      eventPath,
+      dryRun,
+    }, null, 2));
     return;
   }
 
@@ -119,51 +228,24 @@ async function main() {
 
   if (action === "adjust") {
     const before = cloneEvalData(data);
-    const tierParsed = parseTierCorrection(text);
-    const parsed = parseAdjustmentRequest(text);
-    let clarifyMessage = "";
-    let category: AdjustmentCategory = "revenue";
-    const reasons: string[] = [];
-
-    if (tierParsed?.kind === "clarify") {
-      clarifyMessage = tierParsed.message;
-    } else if (tierParsed?.kind === "ok") {
-      try {
-        reasons.push(applyTierCorrection(data, tierParsed.tier, await loadMarketKnowledge(), { keepNumbers: tierParsed.keepNumbers }).reasoning);
-        category = "classification-tier";
-      } catch (error) {
-        if (!(error instanceof TierCorrectionError)) throw error;
-        clarifyMessage = error.message;
-      }
-      // A number in the same reply ("tier 1, set balanced to 27,400") lands on
-      // top of the re-underwrite. Skip the generic "higher tier" uplift, which
-      // would double-count the tier change.
-      if (!clarifyMessage && parsed.kind === "ok" && parsed.spec.category !== "general-direction") {
-        reasons.push(applyStructuredAdjustment(data, parsed.spec).reasoning);
-      }
-    } else if (parsed.kind === "none") {
+    const result = await applyReplyAdjustments(data, text);
+    if (result.kind === "none") {
       throw new Error("Adjustment was classified but no supported rule matched.");
-    } else if (parsed.kind === "clarify") {
-      clarifyMessage = parsed.message;
-    } else {
-      reasons.push(applyStructuredAdjustment(data, parsed.spec).reasoning);
-      category = parsed.spec.category;
     }
-
-    if (clarifyMessage) {
+    if (result.kind === "clarify") {
       if (!dryRun) {
-        await reply(channel, targetThreadTs, clarifyMessage);
+        await reply(channel, targetThreadTs, result.message);
         await upsertThreadContext({
           threadTs: targetThreadTs,
           row,
-          data,
+          data: before,
           slackChannelId: channel,
           event: {
             kind: "thread-reply",
             action: "adjust_clarify",
             user,
             text,
-            note: clarifyMessage,
+            note: result.message,
             status: asString(row.Status),
             version: asNumber(row.Version),
             eventPath,
@@ -174,7 +256,7 @@ async function main() {
       console.log(JSON.stringify({
         ok: true,
         action: "adjust_clarify",
-        message: clarifyMessage,
+        message: result.message,
         threadTs: targetThreadTs,
         mlsNumber: data.mlsNumber,
         eventPath,
@@ -183,71 +265,17 @@ async function main() {
       return;
     }
 
-    const reasoning = reasons.join(" ");
     const nextVersion = asNumber(row.Version) + 1;
-
     if (!dryRun) {
-      await saveEvalData(path, data);
-      await writeEvaluationVersion(data, {
-        source: asString((row as any)["Listing Source"] || "new_listing"),
-        version: String(nextVersion),
-        status: "pending_review",
-        "slack-ts": targetThreadTs,
-        // Carry an existing R2 key forward (re-eval of an approved row); leave
-        // null for still-pending rows. Never re-introduce a local path.
-        "pdf-path": asString(row["PDF Path"]) || undefined,
-      });
-      await upsertAdjustmentForMls({
-        evalId: asString(row["Eval ID"]),
-        mlsNumber: asString(row["MLS #"]),
-        requestedBy: user,
-        requestText: text,
-        category,
-        reasoning,
-        after: data,
-        fallbackBefore: before,
-        classification: {
-          market: asString(data.market),
-          subMarket: asString(data.subMarket),
-          luxuryTier: asString(data.luxuryTier),
-          amenities: data.amenities || { primary: [], secondary: [] },
-        },
-      });
-      await reply(channel, targetThreadTs, buildProjectionReply(data, reasoning));
-      if (targetThreadTs) {
-        const latest = await resolveEvaluationByThread(targetThreadTs);
-        if (latest) {
-          await upsertThreadContext({
-            threadTs: targetThreadTs,
-            row: latest.row,
-            data: latest.data,
-            slackChannelId: channel,
-            event: {
-              kind: "thread-reply",
-              action,
-              user,
-              text,
-              note: reasoning,
-              status: asString(latest.row.Status),
-              version: asNumber(latest.row.Version),
-              eventPath,
-            },
-          });
-        }
-      }
+      await persistAdjustedVersion(ctx, data, before, { category: result.category, reasoning: result.reasoning, action, postReply: true });
     }
 
     console.log(JSON.stringify({
       ok: true,
       action,
-      category,
-      reasoning,
-      luxuryTier: data.luxuryTier,
-      revenue: {
-        optimized: data.projections?.high.revenue,
-        balanced: data.projections?.medium.revenue,
-        conservative: data.projections?.low.revenue,
-      },
+      category: result.category,
+      reasoning: result.reasoning,
+      ...projectionSummary(data),
       threadTs: targetThreadTs,
       mlsNumber: data.mlsNumber,
       nextVersion,

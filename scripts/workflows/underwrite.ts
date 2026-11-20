@@ -13,6 +13,7 @@ import {
   type ProjectionResult,
 } from "./market-knowledge.ts";
 import { inferUnderwriteDecision } from "./underwrite-decision.ts";
+import { buildSeasonalScenario, type SeasonalityProfile } from "./seasonality.ts";
 
 export type UnderwriteInput = {
   listingId: string;
@@ -100,41 +101,14 @@ function inferMarketEligibility(input: UnderwriteInput, region: string) {
   return { marketEligible: false, marketEligibleReason: "city_not_in_supported_markets" };
 }
 
-export function buildScenario(baseAdr: number, baseOcc: number, adrFactor: number, occDelta: number): EvalScenario {
-  const monthlyProfiles = [
-    ["Jan", 1.32, 1.14, 31],
-    ["Feb", 1.26, 1.10, 28],
-    ["Mar", 1.12, 1.04, 31],
-    ["Apr", 0.46, 0.74, 30],
-    ["May", 0.40, 0.72, 31],
-    ["Jun", 0.95, 0.86, 30],
-    ["Jul", 1.08, 0.93, 31],
-    ["Aug", 1.00, 0.91, 31],
-    ["Sep", 0.58, 0.78, 30],
-    ["Oct", 0.50, 0.75, 31],
-    ["Nov", 0.66, 0.84, 30],
-    ["Dec", 1.18, 1.10, 31],
-  ] as const;
-
-  const scenarioAdr = round(baseAdr * adrFactor);
-  const scenarioOcc = clamp(baseOcc + occDelta, 0.18, 0.82);
-  const monthly = monthlyProfiles.map(([month, occMult, adrMult, days]) => {
-    const occupancy = clamp(scenarioOcc * occMult, 0.18, 0.9);
-    const adr = round(scenarioAdr * adrMult);
-    return {
-      month,
-      revenue: round(occupancy * adr * days),
-      occupancy: Number(occupancy.toFixed(2)),
-      adr,
-    };
-  });
-
-  return {
-    revenue: monthly.reduce((sum, month) => sum + month.revenue, 0),
-    occupancy: Number(scenarioOcc.toFixed(2)),
-    adr: scenarioAdr,
-    monthly,
-  };
+export function buildScenario(
+  baseAdr: number,
+  baseOcc: number,
+  adrFactor: number,
+  occDelta: number,
+  profile: SeasonalityProfile = "standard",
+): EvalScenario {
+  return buildSeasonalScenario(baseAdr, baseOcc, adrFactor, occDelta, profile);
 }
 
 function buildComparables(input: UnderwriteInput, region: string, medium: EvalScenario) {

@@ -119,6 +119,10 @@ Then handle based on content:
 
 - **"approve"** or similar confirmation:
   Run the thread-reply workflow with the user message. Do not ask "what should I approve?" when the user is already in an evaluation thread.
+  "approve ski-heavy" / "approve summer-heavy" reshape the monthly curve (annual totals unchanged) and then approve, in one workflow call. Pass the message through unchanged.
+
+- **Seasonality curve on its own** ("ski-heavy", "summer-heavy", "standard curve"):
+  Run the thread-reply workflow with the user message. It reshapes the months and reposts the projections for review.
 
 - **"dismiss"** or rejection:
   Run the thread-reply workflow with the user message.

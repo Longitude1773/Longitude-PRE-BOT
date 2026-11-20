@@ -74,6 +74,8 @@ export type EvalData = {
   tierConfidence?: "high" | "borderline";
   borderlineWith?: string;
   amenities?: EvalAmenities;
+  /** Monthly revenue curve; see scripts/workflows/seasonality.ts. Absent = standard. */
+  seasonalityProfile?: string;
   confidence?: string;
   rentZestimate?: number;
   grounding?: EvalGrounding;

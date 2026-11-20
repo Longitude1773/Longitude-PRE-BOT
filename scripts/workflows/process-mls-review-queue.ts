@@ -6,6 +6,7 @@ import { readSheet, upsertSheetRows } from "../sheets.ts";
 import { buildListingRow, type EvalData } from "../write-sheet-data.ts";
 import { deriveSpreadScenarios, inferEvalPath, repoRoot, roundProjectionRevenue, writeEvaluationVersionsBatch } from "./lib.ts";
 import { classify, loadMarketKnowledge, type ListingFacts } from "./market-knowledge.ts";
+import { buildSeasonalScenario } from "./seasonality.ts";
 import { uploadImageToR2 } from "../r2.ts";
 
 type QueueItem = {
@@ -188,43 +189,6 @@ function normalizeNightlyRentalAllowed(raw: string) {
   if (["yes", "y", "true", "allowed", "approved", "permitted"].includes(value)) return "Yes";
   if (["no", "n", "false", "not allowed", "not approved", "not permitted", "prohibited"].includes(value)) return "No";
   return raw;
-}
-
-function buildScenario(baseAdr: number, baseOcc: number, adrFactor: number, occDelta: number) {
-  const monthlyProfiles = [
-    ["Jan", 1.32, 1.14, 31],
-    ["Feb", 1.26, 1.10, 28],
-    ["Mar", 1.12, 1.04, 31],
-    ["Apr", 0.46, 0.74, 30],
-    ["May", 0.40, 0.72, 31],
-    ["Jun", 0.95, 0.86, 30],
-    ["Jul", 1.08, 0.93, 31],
-    ["Aug", 1.00, 0.91, 31],
-    ["Sep", 0.58, 0.78, 30],
-    ["Oct", 0.50, 0.75, 31],
-    ["Nov", 0.66, 0.84, 30],
-    ["Dec", 1.18, 1.10, 31],
-  ] as const;
-
-  const scenarioAdr = round(baseAdr * adrFactor);
-  const scenarioOcc = clamp(baseOcc + occDelta, 0.18, 0.82);
-  const monthly = monthlyProfiles.map(([month, occMult, adrMult, days]) => {
-    const occupancy = clamp(scenarioOcc * occMult, 0.18, 0.9);
-    const adr = round(scenarioAdr * adrMult);
-    return {
-      month,
-      revenue: round(occupancy * adr * days),
-      occupancy: Number(occupancy.toFixed(2)),
-      adr,
-    };
-  });
-
-  return {
-    revenue: monthly.reduce((sum, month) => sum + month.revenue, 0),
-    occupancy: Number(scenarioOcc.toFixed(2)),
-    adr: scenarioAdr,
-    monthly,
-  };
 }
 
 function buildComparables(item: QueueItem, region: string, medium: { revenue: number; occupancy: number; adr: number }) {
@@ -472,7 +436,7 @@ async function processQueue() {
       if (tier === "luxury") baseOcc += 0.05;
       baseOcc = clamp(baseOcc, 0.42, 0.72);
 
-      const projections = deriveSpreadScenarios(buildScenario(baseAdr, baseOcc, 1, 0));
+      const projections = deriveSpreadScenarios(buildSeasonalScenario(baseAdr, baseOcc, 1, 0));
 
       // Classify the listing with the same engine the Zillow / on-demand paths
       // use, so the Slack classification block renders sub-market, market, tier,

@@ -10,6 +10,7 @@ node --import tsx --test \
   scripts/workflows/lib.adjustment.test.ts \
   scripts/workflows/tier-correction.test.ts \
   scripts/hubspot-agent-task.test.ts \
+  scripts/workflows/seasonality.test.ts \
   scripts/workflows/underwrite-research.test.ts \
   scripts/autoresearch/underwrite-benchmark.test.ts \
   scripts/autoresearch/review-reward-benchmark.test.ts

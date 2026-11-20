@@ -9,6 +9,7 @@ import {
   type LuxuryTier,
   type MarketKnowledge,
 } from "./market-knowledge.ts";
+import { profileOf, withSeasonalityLine } from "./seasonality.ts";
 import { buildScenario, buildSupportedMethodology } from "./underwrite.ts";
 
 export type TierCorrectionParse =
@@ -98,7 +99,7 @@ export function applyTierCorrection(
   const priorMedium = data.projections.medium;
   const bedrooms = Number.isFinite(data.bedrooms) ? Number(data.bedrooms) : 2;
   const projection = projectMedium(bedrooms, knowledge, classification);
-  data.projections = deriveSpreadScenarios(buildScenario(projection.adr, projection.occupancy, 1, 0));
+  data.projections = deriveSpreadScenarios(buildScenario(projection.adr, projection.occupancy, 1, 0, profileOf(data)));
   roundProjectionRevenue(data);
   const medium = data.projections.medium;
 
@@ -120,9 +121,12 @@ export function applyTierCorrection(
     price: data.price,
     squareFootage: data.squareFootage,
   } as Parameters<typeof buildSupportedMethodology>[3]);
-  data.methodology = methodology.replace(
-    /^Tier: .*$/m,
-    `Tier: ${tierName(tier)} — set by the reviewer in the Slack thread${priorTier && priorTier !== tier ? ` (model had ${tierName(priorTier)})` : ""}.`,
+  data.methodology = withSeasonalityLine(
+    methodology.replace(
+      /^Tier: .*$/m,
+      `Tier: ${tierName(tier)} — set by the reviewer in the Slack thread${priorTier && priorTier !== tier ? ` (model had ${tierName(priorTier)})` : ""}.`,
+    ),
+    profileOf(data),
   );
 
   const reviewerNote = ` Reviewer reclassified this property to ${tierName(tier)}; projections were re-underwritten from that tier's grid cell.`;

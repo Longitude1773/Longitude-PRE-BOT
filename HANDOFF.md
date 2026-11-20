@@ -59,6 +59,41 @@ connector, not the API. Already-created tasks are not reassigned. CLI: `--approv
 <slack-id>`. Verified by dry run on MLS 12605064 for all four cases; not yet exercised by
 a live approval.
 
+**Seasonality curves (three monthly shapes).** `scripts/workflows/seasonality.ts` holds
+Erik's monthly revenue shares (each row sums to 100):
+
+| Curve | Jan–Dec % | Winter / Summer / Shoulder |
+|---|---|---|
+| standard (default) | 16 15 14 2 3 9 11 9 4 3 4 10 | 55 / 29 / 16 |
+| ski-heavy | 19 18 17 2 3 6 8 6 4 2 4 11 | 65 / 20 / 15 |
+| summer-heavy | 11 10 10 2 5 12 14 12 9 3 4 8 | 39 / 38 / 23 |
+
+- Replies: "approve ski-heavy" / "approve summer-heavy" reshape → save next version
+  (`seasonality` in Adjustments) → approve → PDF, one step. "ski-heavy" / "summer-heavy" /
+  "standard curve" alone = adjustment that reposts numbers. Plain "approve" unchanged.
+  Logic in `reply-adjustments.ts` (tier → number → curve, curve last since it only
+  re-spreads months); `handle-thread-reply.ts` uses it.
+- Annual level is unchanged: `buildSeasonalScenario` still computes the annual figure
+  from the old curve's ADR/occupancy multipliers, then spreads it by the shares. Monthly
+  occupancy follows the curve (capped 18–90%, 0.6 of the swing); ADR = revenue ÷
+  (occupancy × days), so peak months show higher rates, not >100% occupancy (the shares
+  would otherwise need 97–116% Feb occupancy at 65% base).
+- Both old copies of the fixed curve are gone (`underwrite.ts`, `process-mls-review-queue.ts`
+  now call `buildSeasonalScenario`). **Every new PRE uses the new Standard** — Dec ~13% →
+  10%, Jan–Mar up. The watcher spawns the queue script per run, so no restart needed.
+- The curve is saved as `seasonalityProfile` on the eval JSON (no DB column; the monthly
+  rows carry the shape). Tier re-underwrites rebuild with it; scale/set adjustments keep
+  it. Non-standard curves add a `Seasonality:` line to the methodology.
+- `roundProjectionRevenue` now rounds months to hundreds by largest remainder so the 12
+  months always sum exactly to the annual figure (they used to drift a few hundred).
+- HubSpot: a re-approval writes a new version row in the same thread; the task step now
+  also skips when any row with the same `slack_timestamp` already has a task, so
+  re-approving (reshape or adjustment) no longer creates a second task. Separate threads
+  for the same MLS still get their own.
+- Verified: 87/87 checks + the 63 other tests pass, tsc clean; dry runs on thread
+  `1794520046.317229` (months sum to $27,400 for every curve); scratch PDFs for both
+  curves render the new chart shape. Not yet exercised by a live approval.
+
 Also seen: one transient Slack `invalid_auth` from `scripts/slack.ts` at 10:50; both bot
 tokens pass `auth.test` afterward and it appears nowhere else.
 

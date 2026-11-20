@@ -284,14 +284,31 @@ function roundToNearestHundred(n: number) {
   return Math.round(n / 100) * 100;
 }
 
+// Round months to hundreds so they add up exactly to the rounded annual figure
+// (largest remainder), instead of rounding each month on its own and letting
+// the chart drift a few hundred dollars off the headline number.
+export function roundMonthsToTotal<T extends { revenue: number }>(monthly: T[], total: number): T[] {
+  const monthSum = monthly.reduce((sum, month) => sum + month.revenue, 0);
+  if (monthly.length === 0 || monthSum <= 0) {
+    return monthly.map((month) => ({ ...month, revenue: roundToNearestHundred(month.revenue) }));
+  }
+  const units = monthly.map((month) => (month.revenue * total) / monthSum / 100);
+  const floors = units.map(Math.floor);
+  let remaining = Math.round(total / 100) - floors.reduce((sum, n) => sum + n, 0);
+  const order = units.map((u, i) => ({ i, frac: u - floors[i] })).sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (const { i } of order) {
+    if (remaining <= 0) break;
+    floors[i] += 1;
+    remaining -= 1;
+  }
+  return monthly.map((month, i) => ({ ...month, revenue: floors[i] * 100 }));
+}
+
 export function roundProjectionRevenue(data: EvalData) {
   if (!data.projections) return;
   for (const scenario of [data.projections.high, data.projections.medium, data.projections.low]) {
     scenario.revenue = roundToNearestHundred(scenario.revenue);
-    scenario.monthly = scenario.monthly.map((month) => ({
-      ...month,
-      revenue: roundToNearestHundred(month.revenue),
-    }));
+    scenario.monthly = roundMonthsToTotal(scenario.monthly, scenario.revenue);
   }
 }
 
@@ -637,7 +654,8 @@ export type AdjustmentCategory =
   | "classification-tier"
   | "classification-market"
   | "classification-amenities"
-  | "general-direction";
+  | "general-direction"
+  | "seasonality";
 
 export async function upsertAdjustmentForMls(params: {
   evalId: string;
