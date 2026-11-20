@@ -16,7 +16,10 @@ import {
   upsertThreadContext,
   updateEvaluationSummaryRow,
   writeEvaluationVersion,
+  type AdjustmentCategory,
 } from "./lib.ts";
+import { loadMarketKnowledge } from "./market-knowledge.ts";
+import { applyTierCorrection, parseTierCorrection, TierCorrectionError } from "./tier-correction.ts";
 
 function argValue(flag: string) {
   const index = process.argv.indexOf(flag);
@@ -27,6 +30,7 @@ function classify(text: string) {
   const lower = text.toLowerCase();
   if (/\bapprove(d)?\b/.test(lower)) return "approve";
   if (/\bdismiss(ed)?\b|\breject(ed)?\b/.test(lower)) return "dismiss";
+  if (parseTierCorrection(text)) return "adjust";
   const adjustment = parseAdjustmentRequest(text);
   if (adjustment.kind === "ok" || adjustment.kind === "clarify") return "adjust";
   return "question";
@@ -115,13 +119,40 @@ async function main() {
 
   if (action === "adjust") {
     const before = cloneEvalData(data);
+    const tierParsed = parseTierCorrection(text);
     const parsed = parseAdjustmentRequest(text);
-    if (parsed.kind === "none") {
+    let clarifyMessage = "";
+    let category: AdjustmentCategory = "revenue";
+    const reasons: string[] = [];
+
+    if (tierParsed?.kind === "clarify") {
+      clarifyMessage = tierParsed.message;
+    } else if (tierParsed?.kind === "ok") {
+      try {
+        reasons.push(applyTierCorrection(data, tierParsed.tier, await loadMarketKnowledge(), { keepNumbers: tierParsed.keepNumbers }).reasoning);
+        category = "classification-tier";
+      } catch (error) {
+        if (!(error instanceof TierCorrectionError)) throw error;
+        clarifyMessage = error.message;
+      }
+      // A number in the same reply ("tier 1, set balanced to 27,400") lands on
+      // top of the re-underwrite. Skip the generic "higher tier" uplift, which
+      // would double-count the tier change.
+      if (!clarifyMessage && parsed.kind === "ok" && parsed.spec.category !== "general-direction") {
+        reasons.push(applyStructuredAdjustment(data, parsed.spec).reasoning);
+      }
+    } else if (parsed.kind === "none") {
       throw new Error("Adjustment was classified but no supported rule matched.");
+    } else if (parsed.kind === "clarify") {
+      clarifyMessage = parsed.message;
+    } else {
+      reasons.push(applyStructuredAdjustment(data, parsed.spec).reasoning);
+      category = parsed.spec.category;
     }
-    if (parsed.kind === "clarify") {
+
+    if (clarifyMessage) {
       if (!dryRun) {
-        await reply(channel, targetThreadTs, parsed.message);
+        await reply(channel, targetThreadTs, clarifyMessage);
         await upsertThreadContext({
           threadTs: targetThreadTs,
           row,
@@ -132,7 +163,7 @@ async function main() {
             action: "adjust_clarify",
             user,
             text,
-            note: parsed.message,
+            note: clarifyMessage,
             status: asString(row.Status),
             version: asNumber(row.Version),
             eventPath,
@@ -143,6 +174,7 @@ async function main() {
       console.log(JSON.stringify({
         ok: true,
         action: "adjust_clarify",
+        message: clarifyMessage,
         threadTs: targetThreadTs,
         mlsNumber: data.mlsNumber,
         eventPath,
@@ -151,7 +183,7 @@ async function main() {
       return;
     }
 
-    const { reasoning } = applyStructuredAdjustment(data, parsed.spec);
+    const reasoning = reasons.join(" ");
     const nextVersion = asNumber(row.Version) + 1;
 
     if (!dryRun) {
@@ -170,7 +202,7 @@ async function main() {
         mlsNumber: asString(row["MLS #"]),
         requestedBy: user,
         requestText: text,
-        category: parsed.spec.category,
+        category,
         reasoning,
         after: data,
         fallbackBefore: before,
@@ -208,6 +240,14 @@ async function main() {
     console.log(JSON.stringify({
       ok: true,
       action,
+      category,
+      reasoning,
+      luxuryTier: data.luxuryTier,
+      revenue: {
+        optimized: data.projections?.high.revenue,
+        balanced: data.projections?.medium.revenue,
+        conservative: data.projections?.low.revenue,
+      },
       threadTs: targetThreadTs,
       mlsNumber: data.mlsNumber,
       nextVersion,

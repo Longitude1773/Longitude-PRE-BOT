@@ -872,9 +872,10 @@ function parseMagnitudeNumber(rawValue: string, rawSuffix = "") {
 // any "optimized X% up / conservative Y% down" phrasing is ignored (structural).
 // Requires balanced/medium + a preposition OR a literal $ before the number, so
 // "balanced 25% down" (a scale) and relative phrasings don't get captured.
+// Common misspellings ("balanace", "balnced") come straight from Slack replies.
 function parseBalancedRevenueTarget(text: string): number | null {
   const m = text.match(
-    /\b(?:balanced|medium)\b(?:\s+revenue)?[\s\S]{0,24}?(?:\b(?:to(?:\s+be)?|should\s+be|of|at)\b\s*\$?|=\s*\$?|\$)\s*([\d,]+(?:\.\d+)?)\s*([km])?/i,
+    /\b(?:balanced|balance|balanace|balanaced|ballanced|balnced|blanced|medium)\b(?:\s+revenue)?[\s\S]{0,24}?(?:\b(?:to(?:\s+be)?|should\s+be|of|at)\b\s*\$?|=\s*\$?|\$)\s*([\d,]+(?:\.\d+)?)\s*([km])?/i,
   );
   if (!m) return null;
   const value = parseMagnitudeNumber(m[1], m[2] || "");

@@ -4,7 +4,54 @@
 > architecture) at the start of each session. Update the top section when you finish
 > meaningful work.
 
-## Current status — 2026-10-20 — watcher hung 6 days on one Zillow scrape (fixed + guarded)
+## Current status — 2026-11-20 — Codex quota cap again (Slack said "authentication failed")
+
+**Cause:** `~/.hermes/auth.json` → `last_status: exhausted`, `429 usage_limit_reached`,
+cap hit 12:17 MT, reset `last_error_reset_at` = 14:50 MT. Not auth; did not re-login.
+
+**What burned the window:** 9 eval threads worked between 10:43 and 12:17 (mostly tier
+corrections), 8–30 model calls each, ~4.75M cache-read + ~340k fresh input tokens (from
+`state.db` `sessions`). Two multipliers, one fixed:
+
+- **Fixed — the bot's skill had outgrown the tool-result limit.**
+  `.hermes-runtime/skills/devops/str-revenue-bot-operations/SKILL.md` had grown to 100,136
+  chars. `skill_view` results over 100k (`DEFAULT_RESULT_SIZE_CHARS`,
+  `tools/budget_config.py`) are spilled to a temp file and the agent gets a 1.5k preview,
+  so on 6 sessions today it ran **without its own operating instructions** and
+  reverse-engineered `handle-thread-reply.ts` / `lib.ts` / `underwrite.ts` instead (30
+  `read_file` + ~20 `search_files`). The background self-improvement review also
+  tool-looped on the 100k skill-size cap 7 times. Moved the 46-line reference index into
+  `references/INDEX.md` (pointer left in SKILL.md) → 85k chars. Backup:
+  `SKILL.md.bak-20261120`. **Keep it under ~90k**; the agent's own patches grow it.
+- **Fixed — tier corrections had no deterministic path.** `parseAdjustmentRequest` had no
+  tier rule ("this is tier 1. Set balanace to 27,400" → `question`), so each one was
+  improvised by the agent (e.g. the untracked `scripts/recalibrate-12604999.ts`). Now
+  `scripts/workflows/tier-correction.ts` (wired into `handle-thread-reply.ts`):
+  - "this is tier N" → re-underwrite from the tier-N grid cell exactly like a fresh eval
+    (`projectMedium` → `buildScenario` → locked spread), rebuild methodology with the tier
+    attributed to the reviewer, update the narrative revenue, rescale the synthetic
+    `market-knowledge` benchmark comps (vendor comps untouched). Logged as
+    `classification-tier`.
+  - "tier N, set balanced to X" → X applied on top of the re-underwrite.
+  - "tier N … numbers look right / keep the numbers" → classification only.
+  - Questions ("why is this tier 1?") still route to `question`; two asserted tiers →
+    clarify; negations ("not tier 1", "from tier 1 to …") are skipped. Downgrading out of
+    `East Basin (Promontory Tier 3-4)` moves to `East Basin`. No recognized sub-market →
+    clarify instead of guessing.
+  - `--dry-run` now prints category, reasoning, tier and the three revenues.
+  - `parseBalancedRevenueTarget` accepts common misspellings (balanace, balnced, …).
+  - `buildScenario` / `buildSupportedMethodology` are now exported from `underwrite.ts`.
+  - Tests: `tier-correction.test.ts` (10, in `autoresearch.checks.sh`; 77/77 pass).
+  - Agent told to use it: `HERMES.md` step 3, SKILL.md header, and a "superseded" note on
+    `references/classification-recalibration.md` + `combined-review-corrections.md`
+    (backups `*.bak-20261120`). Gateway restarted so HERMES.md takes effect (it is read
+    into `HERMES_EPHEMERAL_SYSTEM_PROMPT` at start).
+  - Not covered: market/sub-market and amenity corrections still go to the agent.
+
+Also seen: one transient Slack `invalid_auth` from `scripts/slack.ts` at 10:50; both bot
+tokens pass `auth.test` afterward and it appears nowhere else.
+
+## Previous status — 2026-10-20 — watcher hung 6 days on one Zillow scrape (fixed + guarded)
 
 **Symptom:** the pipeline stall alert (`heartbeat-stale`) posted every 6h from Oct 14 on.
 `launchctl list` showed the watcher with a live PID the whole time; `mls-watch-state.json`

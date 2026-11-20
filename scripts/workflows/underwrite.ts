@@ -100,7 +100,7 @@ function inferMarketEligibility(input: UnderwriteInput, region: string) {
   return { marketEligible: false, marketEligibleReason: "city_not_in_supported_markets" };
 }
 
-function buildScenario(baseAdr: number, baseOcc: number, adrFactor: number, occDelta: number): EvalScenario {
+export function buildScenario(baseAdr: number, baseOcc: number, adrFactor: number, occDelta: number): EvalScenario {
   const monthlyProfiles = [
     ["Jan", 1.32, 1.14, 31],
     ["Feb", 1.26, 1.10, 28],
@@ -229,7 +229,7 @@ function describeAmenityLift(classification: Classification, knowledge: MarketKn
   return lines.join("\n");
 }
 
-function buildSupportedMethodology(
+export function buildSupportedMethodology(
   knowledge: MarketKnowledge,
   classification: Classification,
   projection: ProjectionResult,

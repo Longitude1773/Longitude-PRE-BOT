@@ -8,6 +8,7 @@ node --import tsx --test \
   scripts/app-mention-alert-lib.test.ts \
   scripts/pipeline-alert-lib.test.ts \
   scripts/workflows/lib.adjustment.test.ts \
+  scripts/workflows/tier-correction.test.ts \
   scripts/workflows/underwrite-research.test.ts \
   scripts/autoresearch/underwrite-benchmark.test.ts \
   scripts/autoresearch/review-reward-benchmark.test.ts

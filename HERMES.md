@@ -105,7 +105,7 @@ If the message is in a Slack thread under an evaluation, do this first:
    npm run workflow:thread-context -- --thread-ts "{current_slack_thread_id}"
    ```
 2. Use the current Slack channel ID as `--channel` and the current Slack thread ID as `--thread-ts`.
-3. For approvals, dismissals, projection adjustments, and ordinary eval-thread questions, prefer the workflow entrypoint below instead of doing the steps manually:
+3. For approvals, dismissals, projection adjustments, tier corrections ("this is tier 2", "tier 1, set balanced to 27,400", "tier 3 but the numbers look right"), and ordinary eval-thread questions, prefer the workflow entrypoint below instead of doing the steps manually. Tier corrections re-underwrite from the corrected tier's grid cell inside the workflow — do not write a one-off recalibration script:
    ```bash
    npm run workflow:handle-thread-reply -- --channel "{current_slack_channel_id}" --thread-ts "{current_slack_thread_id}" --text "{exact_user_message}" --user "{current_slack_user_id}"
    ```
