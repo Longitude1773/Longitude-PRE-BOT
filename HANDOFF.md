@@ -93,6 +93,10 @@ Erik's monthly revenue shares (each row sums to 100):
 - Verified: 87/87 checks + the 63 other tests pass, tsc clean; dry runs on thread
   `1794520046.317229` (months sum to $27,400 for every curve); scratch PDFs for both
   curves render the new chart shape. Not yet exercised by a live approval.
+- Gateway restarted 15:01 MT (launchd kickstart, idle since 12:32) so the HERMES.md
+  curve wording is in the system prompt. At restart `auth.json` still read `exhausted`
+  from the 12:17 cap although `last_error_reset_at` (14:50) had passed — the marker only
+  updates on the next model call, so it is stale, not a new fault.
 
 Also seen: one transient Slack `invalid_auth` from `scripts/slack.ts` at 10:50; both bot
 tokens pass `auth.test` afterward and it appears nowhere else.
