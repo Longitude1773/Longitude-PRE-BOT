@@ -48,6 +48,17 @@ corrections), 8–30 model calls each, ~4.75M cache-read + ~340k fresh input tok
     into `HERMES_EPHEMERAL_SYSTEM_PROMPT` at start).
   - Not covered: market/sub-market and amenity corrections still go to the agent.
 
+**HubSpot PRE task now goes to the Slack approver.** Spencer Sanders took over most PRE
+approvals. `handle-thread-reply` passes `--user` to `approve-eval`, which passes
+`approvedBy` to `createAgentTaskForListing`; `HUBSPOT_OWNER_BY_SLACK_USER` in
+`scripts/hubspot-agent-task.ts` maps Slack id → HubSpot owner id (Erik `U053T09V88P` →
+`80608210`, Spencer `U04KN0PHWTB` → `159240868`). Unknown/missing approver → default owner
+(`HUBSPOT_TASK_OWNER_ID`, else Erik). Add a row when someone new approves. The bot's
+private app lacks `crm.objects.owners.read`, so owner ids were looked up via the HubSpot
+connector, not the API. Already-created tasks are not reassigned. CLI: `--approved-by
+<slack-id>`. Verified by dry run on MLS 12605064 for all four cases; not yet exercised by
+a live approval.
+
 Also seen: one transient Slack `invalid_auth` from `scripts/slack.ts` at 10:50; both bot
 tokens pass `auth.test` afterward and it appears nowhere else.
 

@@ -1,7 +1,8 @@
 /**
  * PRE Bot → HubSpot: on an approved listing, upsert the listing agent as a
  * HubSpot contact, stamp evaluation-tracking properties, and create a short
- * reminder task pointing Erik at the matching Sales Template.
+ * reminder task, assigned to whoever approved the PRE in Slack, pointing them
+ * at the matching Sales Template.
  *
  * The email COPY lives in a HubSpot Sales Template now, not here — the bot no
  * longer renders an email body (see scripts/hubspot-task-template.ts).
@@ -14,6 +15,7 @@
  *   npx tsx scripts/hubspot-agent-task.ts --mls 12603349 [--dry-run]
  *   npx tsx scripts/hubspot-agent-task.ts --eval-id <uuid> [--dry-run]
  *   --force   bypass the approved-status and new_listing-source guards (testing)
+ *   --approved-by <slack-user-id>   assign the task to that approver's HubSpot owner
  *
  * SCOPE GUARD — only listings the MLS watcher found (listing_source =
  * "new_listing") get a task, plus evaluations the open-house tracker started
@@ -61,8 +63,24 @@ function loadEnv() {
   }
 }
 
-// Erik — task owner in HubSpot.
+// Default task owner (Erik) — used when the approver is unknown or unmapped,
+// e.g. a by-hand run with no --approved-by.
 const TASK_OWNER_ID = process.env.HUBSPOT_TASK_OWNER_ID || "80608210";
+
+// Slack user who approved the PRE → HubSpot owner who gets the "send the PRE"
+// task. Add a row when someone new starts approving. HubSpot owner ids are not
+// user ids; look them up under Settings → Users & Teams or the owners API (the
+// bot's private app lacks crm.objects.owners.read, so it cannot list them).
+export const HUBSPOT_OWNER_BY_SLACK_USER: Record<string, { ownerId: string; name: string }> = {
+  U053T09V88P: { ownerId: "80608210", name: "Erik Mikkelsen" },
+  U04KN0PHWTB: { ownerId: "159240868", name: "Spencer Sanders" },
+};
+
+export function resolveTaskOwner(approvedBy?: string): { ownerId: string; name: string; matched: boolean } {
+  const mapped = approvedBy ? HUBSPOT_OWNER_BY_SLACK_USER[approvedBy.trim()] : undefined;
+  if (mapped) return { ...mapped, matched: true };
+  return { ownerId: TASK_OWNER_ID, name: "default owner", matched: false };
+}
 
 // Only MLS-watcher listings get an agent task (plus open-house tracker evals —
 // see the scope guard above).
@@ -120,6 +138,8 @@ export type CreateAgentTaskOptions = {
   force?: boolean;
   /** When false, suppress per-step console logging (used by the approve handler). */
   log?: boolean;
+  /** Slack user id of the approver; picks the task owner via HUBSPOT_OWNER_BY_SLACK_USER. */
+  approvedBy?: string;
 };
 
 export type CreateAgentTaskResult = {
@@ -134,6 +154,9 @@ export type CreateAgentTaskResult = {
   contactCreated?: boolean;
   taskId?: string;
   taskUrl?: string;
+  /** HubSpot owner the task was (or, on a dry run, would be) assigned to. */
+  taskOwnerId?: string;
+  taskOwnerName?: string;
   /** True when the Supabase write-back could not be persisted (columns missing, etc). */
   writeBackFailed?: boolean;
 };
@@ -285,7 +308,9 @@ export async function createAgentTaskForListing(
 
   const subject = renderTaskSubject(displayAddress, agentStatus);
   const body = renderTaskBody(agentStatus);
+  const owner = resolveTaskOwner(opts.approvedBy);
   say(`  Task subject     ${subject}`);
+  say(`  Task owner       ${owner.name} (${owner.ownerId})${opts.approvedBy && !owner.matched ? ` — Slack user ${opts.approvedBy} is not mapped` : ""}`);
 
   if (opts.dryRun) {
     say(`\nDRY RUN — nothing written. evaluations_sent_count would go ${priorCount} → ${nextCount}.`);
@@ -297,6 +322,8 @@ export async function createAgentTaskForListing(
       mlsNumber,
       evalId,
       contactId: existing?.id,
+      taskOwnerId: owner.ownerId,
+      taskOwnerName: owner.name,
     };
   }
 
@@ -326,7 +353,7 @@ export async function createAgentTaskForListing(
       hs_task_subject: subject,
       hs_task_body: body,
       hs_timestamp: String(Date.now()),
-      hubspot_owner_id: TASK_OWNER_ID,
+      hubspot_owner_id: owner.ownerId,
       hs_task_status: "NOT_STARTED",
       hs_task_type: "EMAIL",
       hs_task_priority: "HIGH",
@@ -380,12 +407,14 @@ export async function createAgentTaskForListing(
     taskId: task.id,
     taskUrl: taskUrl(task.id),
     writeBackFailed,
+    taskOwnerId: owner.ownerId,
+    taskOwnerName: owner.name,
   };
 }
 
 // --- CLI wrapper ---------------------------------------------------------
 
-type Args = { mls?: string; evalId?: string; dryRun: boolean; force: boolean };
+type Args = { mls?: string; evalId?: string; approvedBy?: string; dryRun: boolean; force: boolean };
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { dryRun: false, force: false };
@@ -395,6 +424,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === "--force") args.force = true;
     else if (arg === "--mls") args.mls = argv[++i];
     else if (arg === "--eval-id") args.evalId = argv[++i];
+    else if (arg === "--approved-by") args.approvedBy = argv[++i];
     else throw new Error(`Unknown argument: ${arg}`);
   }
   if (!args.mls && !args.evalId) {
@@ -410,6 +440,7 @@ async function main() {
     evalId: args.evalId,
     dryRun: args.dryRun,
     force: args.force,
+    approvedBy: args.approvedBy,
     log: true,
   });
   if (result.skipped && result.skipped !== "dry-run") {

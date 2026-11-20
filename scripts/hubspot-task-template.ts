@@ -5,9 +5,9 @@
  * ("New Listing PRE Delivery (New contact)" / "…(Existing contact)") that pulls
  * everything from the contact's personalization tokens, so messaging can be
  * edited in the HubSpot UI without a code change. The bot only creates a short
- * reminder task pointing Erik at the right template.
+ * reminder task pointing the approver at the right template.
  *
- * The task flags whether the agent was new or existing in HubSpot so Erik knows
+ * The task flags whether the agent was new or existing in HubSpot so the approver knows
  * which template to insert at a glance.
  */
 

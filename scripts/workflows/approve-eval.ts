@@ -14,6 +14,8 @@ async function main() {
   const channel = argValue("--channel") || process.env.SLACK_CHANNEL_ID;
   const threadTs = argValue("--thread-ts");
   const mls = argValue("--mls");
+  // Slack user who approved; their HubSpot owner gets the "send the PRE" task.
+  const user = argValue("--user") || "";
   const dryRun = process.argv.includes("--dry-run");
 
   if (!channel) throw new Error("Missing --channel or SLACK_CHANNEL_ID.");
@@ -77,7 +79,7 @@ async function main() {
     // still succeeds. Operates on the exact resolved Eval ID (no version
     // ambiguity), and is idempotent on that row's hubspot_task_id.
     try {
-      const result = await createAgentTaskForListing({ evalId: asString(row["Eval ID"]) });
+      const result = await createAgentTaskForListing({ evalId: asString(row["Eval ID"]), approvedBy: user });
       hubspot = result;
       // Speak up only when it's actionable: a genuine skip we'd want to fix
       // (no agent email captured) or a write-back that didn't persist. Silent

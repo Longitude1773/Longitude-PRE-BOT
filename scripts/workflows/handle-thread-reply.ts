@@ -58,7 +58,7 @@ async function main() {
 
   if (action === "approve") {
     if (!dryRun) {
-      const result = spawnSync("npx", ["tsx", "scripts/workflows/approve-eval.ts", "--channel", channel, "--thread-ts", targetThreadTs], {
+      const result = spawnSync("npx", ["tsx", "scripts/workflows/approve-eval.ts", "--channel", channel, "--thread-ts", targetThreadTs, "--user", user], {
         cwd: process.cwd(),
         encoding: "utf8",
         stdio: "pipe",
